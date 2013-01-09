@@ -1,0 +1,19 @@
+extends layout
+
+block css
+  link(rel='stylesheet', href='stylesheets/index.css')
+
+block content
+  form#converter
+    #javacode
+      h2 Java
+      textarea(name='jcode')
+    #pythoncode
+      h2 Python
+      textarea(name='pycode', readonly)
+    #compile-div
+      input(id='convert', type='submit', value='Compile')
+
+block scripts
+  script(src='/javascripts/jquery.js')
+  script(src='/javascripts/converter.js')

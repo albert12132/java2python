@@ -1,0 +1,25 @@
+textarea {
+    height:200px;
+    resize:none;
+    width:500px;
+}
+
+#converter h2 {
+    text-align:center;
+}
+
+#converter {
+    min-width:1100px;
+}
+
+#javacode {
+    position:absolute;
+}
+
+#pythoncode {
+    float:right;
+}
+
+#compile-div {
+    position:absolute;
+}

@@ -1,0 +1,17 @@
+body {
+    margin:0;
+    font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
+}
+
+#header {
+    min-height:80px;
+    background-color:#24ab7a;
+}
+
+#logo {
+    position:absolute;
+    top:10px;
+    left:20px;
+}
+
+
