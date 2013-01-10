@@ -33,7 +33,7 @@ var interface = require('./interface')
 var TAB = '    ';
 var CONTROLS = [];
 var OPERATORS = ['+', '-', '*', '/', '(', ')'];
-var FATAL;
+var FATAL, privMod = false;
 
 /*---------*
  * EXPORTS *
@@ -47,8 +47,9 @@ var FATAL;
  *
  * @return {string} Python code
  */
-function translate(classes, fatal) {
+function translate(classes, fatal, private) {
   FATAL = fatal;
+  privMod = private;
   var pycode = '';
   classes.forEach(function(cls) {
     pycode += translateClass(cls);
@@ -99,7 +100,7 @@ function translateClassVariables(cls) {
   code = [];
   classVars.forEach(function(variable) {
     if (variable.value == null) return;
-    var line = !variable.mods.public ? '_' : '';
+    var line = !variable.mods.public && privMod ? '_' : '';
     line += variable.name + ' = ' + writeExpr(variable.value, [], cls);
     code.push(line);
   });
@@ -130,7 +131,7 @@ function translateConstructors(cls) {
   var instanceVars = [];
   cls.getAll('variables', {static: false}).forEach(function(variable) {
     if (variable.value == null) return;
-    var line = variable.mods.public ? 'self.' : 'self._';
+    var line = !variable.mods.public && privMod ? 'self._' : 'self.';
     line += variable.name  + ' = ' + writeExpr(variable.value, [], cls);
     instanceVars.push(line);
   });
@@ -431,14 +432,21 @@ function writeIdentifier(identifier, locals, cls, type) {
   var first = dot[0];
   if (first == 'this') {
     var result = cls.get(type, dot[1], {static: false});
-    if (result) dot[0] = 'self';
+    if (result) {
+      dot[0] = 'self';
+      if (!result.mods.public && privMod) dot[1] = '_' + dot[1];
+    }
     else return undefined;
   } else if (first == cls.name) {
     var result = cls.get(type, dot[1], {static: true});
-    if (!result) return undefined;
+    if (result && !result.mods.public && privMod) dot[1] = '_' +dot[1];
+    else if (!result) return undefined;
   } else if (locals.indexOf(first) == -1) {
     var variable = cls.get(type, first);
-    if (variable) dot.unshift('self');
+    if (variable) {
+      dot.unshift('self');
+      if (!variable.mods.public && privMod) dot[1] = '_' + dot[1];
+    }
     else return undefined;
   }
   return dot.join('.');

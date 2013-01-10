@@ -1,0 +1,3 @@
+class Ex(object):
+    pass
+

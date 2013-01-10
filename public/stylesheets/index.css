@@ -28,6 +28,13 @@
     display:inline-block;
     margin:0;
     text-align:center;
+}
+
+#javacode .title-name, #javacode .title-button {
+    width:33%;
+}
+
+#pythoncode .title-name, #pythoncode .title-button {
     width:49%;
 }
 
@@ -38,6 +45,9 @@
     border-style:none none none solid;
     transition: background-color .2s linear;
     -webkit-transition: background-color .2s linear;
+}
+#compile {
+    border-style:none solid;
 }
 .title-button:hover {
     background-color:#888;
@@ -59,5 +69,14 @@ textarea {
     padding:10px;
     resize:none;
     width:93%;
+}
+
+#options-div {
+    display:none;
+    text-align:left;
+}
+
+.option-box {
+    margin:10px 0;
 }
 

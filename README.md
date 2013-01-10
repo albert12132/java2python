@@ -29,6 +29,4 @@ Issues and improvements
     * ` ? : `
 * Hashtables -> dictionaries
 * Web interface options:
-    * turning on/off protection modifiers
     * optimizations (e.g. method overloading)
-    * loose syntax (i.e. only issue compiler *warnings* if possible)

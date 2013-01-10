@@ -381,7 +381,6 @@ exports.isNumber = isNumber;
 exports.logError = logError;
 exports.logParseError = logParseError;
 exports.Tokens = Tokens;
-exports.ParseException = ParseException;
 exports.Class = Class;
 exports.Method = Method;
 exports.Variable = Variable;

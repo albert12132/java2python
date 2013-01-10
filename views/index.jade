@@ -4,20 +4,28 @@ block css
   link(rel='stylesheet', href='stylesheets/index.css')
 
 block content
-  form#compiler
+  #compiler
     #javacode
       .title-bar
         h2.title-name Java
         h2.title-button#compile Compile
+        h2.title-button#options Options
       .code
-        textarea(name='jcode')
+        textarea(name='jcode', id='jcode')
+        form#options-div
+          .option-box
+            input(type='checkbox',id='private') 
+            | translate private modifiers as '_' variables
+          .option-box
+            input(type='checkbox',id='warning',checked)
+            | Ignore compiler errors if possible
     #pythoncode
       .title-bar
         h2.title-name Python
         h2.title-button#export Export
       .code
-        textarea(name='pycode', readonly)
+        textarea(name='pycode', id='pycode', readonly)
 
 block scripts
   script(src='/javascripts/jquery.js')
-  script(src='/javascripts/compiler.js')
+  script(src='/javascripts/utils.js')
