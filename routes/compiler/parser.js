@@ -83,12 +83,10 @@ function readClass(buffer, modifiers) {
   var token = buffer.shift('class');
   if (token != 'class') throw new Exception(token, 'class');
 
-  // validate name
   var cls = new Class(buffer.shift('<identifier>'));
   validate(cls.name, true);
   token = buffer.shift('{');
 
-  // check inheritance
   if (token == 'extends') {
     cls.super = buffer.shift('<superclass>');
     validate(cls.super, true);

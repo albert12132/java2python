@@ -1,25 +1,63 @@
-textarea {
-    height:200px;
-    resize:none;
-    width:500px;
-}
-
-#converter h2 {
+#compiler {
+    margin:20px;
     text-align:center;
 }
 
-#converter {
-    min-width:1100px;
-}
-
-#javacode {
-    position:absolute;
-}
-
+#javacode,
 #pythoncode {
-    float:right;
+    background-color:#666;
+    border-radius:9px;
+    color:#eee;
+    height:350px;
+    margin:10px 50px;
+    padding:0 5px;
+    position:relative;
+    width:500px;
+    display:inline-block;
 }
 
-#compile-div {
-    position:absolute;
+.title-bar {
+    border-style:none none solid none;
+    border-width:2px;
+    height:8%;
+    padding:5px;
 }
+
+.title-name, .title-button{
+    border-width:1px;
+    display:inline-block;
+    margin:0;
+    text-align:center;
+    width:49%;
+}
+
+.title-name {
+    border-style:none solid none none;
+}
+.title-button {
+    border-style:none none none solid;
+    transition: background-color .2s linear;
+    -webkit-transition: background-color .2s linear;
+}
+.title-button:hover {
+    background-color:#888;
+    cursor:hand;
+    cursor:pointer;
+}
+
+
+.code {
+    height:85%;
+    padding:5px;
+    width:490px;
+    text-align:center;
+}
+
+textarea {
+    border:none;
+    height:90%;
+    padding:10px;
+    resize:none;
+    width:93%;
+}
+

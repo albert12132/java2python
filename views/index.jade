@@ -4,16 +4,20 @@ block css
   link(rel='stylesheet', href='stylesheets/index.css')
 
 block content
-  form#converter
+  form#compiler
     #javacode
-      h2 Java
-      textarea(name='jcode')
+      .title-bar
+        h2.title-name Java
+        h2.title-button#compile Compile
+      .code
+        textarea(name='jcode')
     #pythoncode
-      h2 Python
-      textarea(name='pycode', readonly)
-    #compile-div
-      input(id='convert', type='submit', value='Compile')
+      .title-bar
+        h2.title-name Python
+        h2.title-button#export Export
+      .code
+        textarea(name='pycode', readonly)
 
 block scripts
   script(src='/javascripts/jquery.js')
-  script(src='/javascripts/converter.js')
+  script(src='/javascripts/compiler.js')

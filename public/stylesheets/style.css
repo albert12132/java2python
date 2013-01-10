@@ -1,17 +1,31 @@
+@import url(http://fonts.googleapis.com/css?family=Julius+Sans+One);
+
 body {
     margin:0;
-    font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
+    font: 18px "Julius Sans One", Helvetica, Arial, sans-serif;
 }
 
 #header {
-    min-height:80px;
-    background-color:#24ab7a;
+    /*background-color:#a4d3ee;*/
+    background-color:#333333;
+    /*
+    border-style:none none solid none;
+    border-width:1px;
+    border-color:#999999;
+    */
+    min-height:50px;
 }
 
 #logo {
     position:absolute;
-    top:10px;
+    top:5px;
     left:20px;
+}
+
+#logo h1 {
+    /*color:#111111;*/
+    color:#eeeeee;
+    margin:0;
 }
 
 

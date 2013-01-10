@@ -2,7 +2,27 @@
  * TRANSLATOR
  *
  * This module translates class {Object}s (see interface.js) into
- * Python code.
+ * Python code. This module mainly consists of 2 types of functions: 
+ * translators and writers. 
+ * 
+ * Translators are used for larger, 'complete' sections of code:
+ *    - entire Class
+ *    - Class variables
+ *    - Constructor
+ *    - Method
+ * They also have the invariant that the code they return contains 2
+ * newlines (so as to leave a blank line between the returned code and
+ * the next block).
+ *
+ * Writers are used for smaller sections of code, and usually do not
+ * return a 'complete' code block. Instead, they are designed to
+ * improve modularity and are combined in translators.
+ *    - method/constructor signature
+ *    - method/constructor body
+ *    - method/constructor call
+ *    - variable assignment
+ * They also have the invariant that the code they return contains 0
+ * newlines.
  *-------------------------------------------------------------------*/
 
 var interface = require('./interface')
@@ -29,7 +49,7 @@ var OPERATORS = ['+', '-', '*', '/', '(', ')'];
 function translate(classes) {
   var pycode = '';
   classes.forEach(function(cls) {
-    pycode += translateClass(cls).trim();
+    pycode += translateClass(cls);
   });
   return pycode;
 }
@@ -38,26 +58,28 @@ exports.translate = translate;
 
 
 /*-------------*
- * SUBROUTINES *
+ * TRANSLATORS *
  *-------------*/
 
 /**
- * Translates a single {Class} object into Python code.
+ * Translates a single {Class} object into Python code. The body of the
+ * class is indented one tab to the right of the class signature.
  *
  * @param cls {Class} object
  *
- * @return {string} Python code
+ * @return {string} Python code -- ends with 2 newlines
  */
 function translateClass(cls) {
-  var signature = 'class ' + cls.name + '(' + cls.super + '):\n';
+  var signature = 'class ' + cls.name + '(' + cls.super + '):';
   var body = ''
-  body += translateClassVariables(cls) + '\n';
-  body += translateConstructors(cls) + '\n';
+  body += translateClassVariables(cls);
+  body += translateConstructors(cls);
   cls.getAll('methods').forEach(function(method) {
-    body += translateMethod(method, cls) + '\n\n';
+    body += translateMethod(method, cls);
   });
-  if (body.trim() == '') body = 'pass';
-  return signature + tab(body);
+  body = body.trim();
+  if (body == '') body = 'pass';
+  return signature + '\n' + tab(body) + '\n\n';
 }
 
 /**
@@ -68,77 +90,94 @@ function translateClass(cls) {
  *
  * @param cls {Class} object
  *
- * @return {string} Python code
+ * @return {string} Python code -- ends with 2 newlines
  */
 function translateClassVariables(cls) {
   var classVars = cls.getAll('variables', {static: true});
-  code = '';
+  code = [];
   classVars.forEach(function(variable) {
     if (variable.value == null) return;
-    if (!variable.mods.public) code += '_';
-    code += variable.name;
-    code += ' = ' + writeExpr(variable.value, [], cls) + '\n';
+    var line = !variable.mods.public ? '_' : '';
+    line += variable.name + ' = ' + writeExpr(variable.value, [], cls);
+    code.push(line);
   });
-  return code;
-}
-
-/**
- * Translates a single method. If the method is overloaded, an if/else
- * block that checks for the number of parameters is written.
- *
- * @param method {string} name of method
- * @param cls {Class} object
- *
- * @return {string} Python code
- */
-function translateMethod(method, cls) {
-  var methods = cls.get('methods', method).filter(function(x) {
-    return true;
-  });
-  var signature = writeSignature(method, methods) + '\n';
-
-  var body = '';
-  if (methods.length == 1) {
-    body += writeBody(methods[0].body, methods[0].args, cls);
-  } else {
-    body += writeOverloadBody(methods, cls);
-  }
-  if (body.trim() == '') body = 'pass';
-  return signature + tab(body);
+  return code.join('\n') + '\n\n';
 }
 
 
 /**
  * Translates constructors of a {Class} object into the __init__ method
- * of the class.
+ * of the class. If the class contains instance variables that are
+ * initialized, the constructor writes those first.
+ *
+ * If the class only has one constructor, the body of that constructor
+ * is written next -- its arguments are also written in the signature.
+ * If the class has overloaded constructors, the bodies of its
+ * constructors are written in an if/elif block.
+ *
+ * @param cls {Class} object
+ *
+ * @return {string} of code -- ends with 2 newlines
  */
 function translateConstructors(cls) {
   var constructors = cls.getAll('constructors').filter(function(x) {
     return true;
   });
-  var signature = writeSignature('__init__', constructors) + '\n';
+  var signature = writeSignature('__init__', constructors);
 
-  body = '';
-  var instanceVars = cls.getAll('variables', {static: false});
-  instanceVars.forEach(function(variable) {
+  var instanceVars = [];
+  cls.getAll('variables', {static: false}).forEach(function(variable) {
     if (variable.value == null) return;
-    body += 'self.';
-    if (!variable.mods.public) body += '_';
-    body += variable.name  + ' = ' + writeExpr(variable.value, [], cls);
-    body += '\n';
+    var line = variable.mods.public ? 'self.' : 'self._';
+    line += variable.name  + ' = ' + writeExpr(variable.value, [], cls);
+    instanceVars.push(line);
   });
+  var body = instanceVars.join('\n') + '\n';
 
   if (constructors.length == 1) {
     body += writeBody(constructors[0].body, constructors[0].args, cls);
   } else if (constructors.length > 1) {
     body += writeOverloadBody(constructors, cls);
   }
-  if (body.trim() == '') return '';
-  return signature + tab(body);
+  body = body.trim();
+  if (body == '') return '';
+  return signature + '\n' + tab(body) + '\n\n';
 }
 
 /**
- * Subroutine that writes the signature of the specified method. 'self'
+ * Translates a single method. If the method is overloaded, an if/elif
+ * block that checks for the number of parameters is written. The
+ * method bodies are then placed in the suites of their respective
+ * if/elif block.
+ *
+ * @param method {string} name of method
+ * @param cls {Class} object
+ *
+ * @return {string} Python code -- ends with 2 newlines
+ */
+function translateMethod(method, cls) {
+  var methods = cls.get('methods', method).filter(function(x) {
+    return true;
+  });
+  var signature = writeSignature(method, methods);
+
+  if (methods.length == 1) {
+    var body = writeBody(methods[0].body, methods[0].args, cls);
+  } else {
+    var body = writeOverloadBody(methods, cls);
+  }
+  body = body.trim();
+  if (body == '') body = 'pass';
+  return signature + '\n' + tab(body) + '\n\n';
+}
+
+
+/*---------*
+ * WRITERS *
+ *---------*/
+
+/**
+ * Writes the signature of the specified method. 'self'
  * is always the first parameter. If the method (or constructor) is
  * overloaded, the only argument other parameter is '*args'). If it is
  * not overloaded, the arguments of that method are written in the
@@ -163,8 +202,9 @@ function writeSignature(name, methods) {
 }
 
 /**
- * Writes the body of an overloaded function. For each method, the
- * arguments ('args') are unpacked into the parameter names.
+ * Writes the body of an overloaded method. For each method, the
+ * arguments ('args') are unpacked into the parameter names, e.g.
+ *    (x, y,) = args
  *
  * @param methods {Array} of {Method} objects
  * @param cls {Class} object
@@ -172,24 +212,32 @@ function writeSignature(name, methods) {
  * @return {string} of code
  */
 function writeOverloadBody(methods, cls) {
-  var first = true, body = '';
+  var first = true, body = [];
   methods.forEach(function(method) {
-    body += first ? 'if ' : 'elif ';
-    body += 'len(args) == ' + method.args.length + ':\n';
-    var suite = '';
+    var clause = 'len(args) == ' + method.args.length + ':\n';
     if (method.args.length > 0) {
-      suite += '(' + method.args.join(', ') + ',) = args\n';
+      clause += tab('(' + method.args.join(', ') + ',) = args') + '\n';
     }
-    suite += writeBody(method.body, method.args, cls);
-    body += tab(suite) + '\n'
-    first = false;
+    clause += tab(writeBody(method.body, method.args, cls));
+    body.push(clause);
   });
-  return body;
+  return 'if ' + body.join('\nelif ').trim();
 }
 
 
 /**
- * Writes the body of a single method.
+ * Writes the body of a single method. This method handles several
+ * types of Java statements:
+ *    - Returns
+ *        return [expr];
+ *    - Control statements
+ *    - Constructor calls
+ *        new <Class name>( [arg1] [, arg2] [, ...] );
+ *    - Method calls
+ *        [object.]<method>( [arg1] [, arg2] [, ...] );
+ *    - Variable assignment
+ *        [datatype] <identifier> = <expression>;
+ *
  *
  * @param stmts {Array} of {Tokens} buffers.
  * @param params {Array} of {strings}, the parameters to the method
@@ -227,13 +275,15 @@ function writeBody(stmts, params, cls) {
     } else {
       throw 'Not a statement'
     }
-    return line.join(' ');
   });
   return body.join('\n');
 }
 
 /**
- * Writes a variable assignment.
+ * Writes a variable assignment. Invalid assignments include:
+ *    - assigning to nothing
+ *    - assigning to 'this'
+ *    - assigning nothing (literally lack of a value)
  *
  * @param line {Tokens}
  * @param identifier {string} variable to be assigned
@@ -244,15 +294,17 @@ function writeBody(stmts, params, cls) {
  */
 function writeAssignment(line, identifier, locals, cls) {
   var value = writeExpr(line, locals, cls);
+  if (!value || value == '') throw 'Invalid expression';
 
-  var identifier = translateIdentifier(identifier, locals, cls, 'var');
+  var identifier = writeIdentifier(identifier, locals, cls, 'var');
   if (!identifier) throw 'Invaild identifier';
   else if (identifier == 'this') throw "Can't reassign 'this'";
   return identifier + ' = ' + value;
 }
 
 /**
- * Writes a method call.
+ * Writes a method call. A method call has the following format:
+ *    [object.]<method name>( [arg1] [, arg2] [, ...] );
  *
  * @param line {Tokens}
  * @param identifier {string} method name
@@ -263,9 +315,9 @@ function writeAssignment(line, identifier, locals, cls) {
  */
 function writeMethodCall(line, identifier, locals, cls) {
   if (identifier == 'System.out.println') identifier = 'print';
-  else identifier = translateIdentifier(identifier, locals, cls, 'method');
+  else identifier = writeIdentifier(identifier, locals, cls, 'method');
   if (!identifier) throw 'Invalid method';
-  var args = translateArgs(line, locals, cls);
+  var args = writeArgs(line, locals, cls);
   return identifier + args;
 }
 
@@ -284,7 +336,7 @@ function writeConstructorCall(line, identifier, locals, cls) {
     throw 'Invalid constructor';
   if (line.shift('(') != '(')
     throw 'Invalid constructor';
-  var args = translateArgs(line, locals, cls);
+  var args = writeArgs(line, locals, cls);
   return identifier + args;
 }
 
@@ -297,7 +349,7 @@ function writeConstructorCall(line, identifier, locals, cls) {
  *
  * @return {string}
  */
-function translateArgs(line, locals, cls) {
+function writeArgs(line, locals, cls) {
   var args = [], token = line.shift(')');
   while (token != ')') {
     var expr = [];
@@ -311,47 +363,6 @@ function translateArgs(line, locals, cls) {
   }
   return '(' + args.join(', ') + ')';
 }
-
-/**
- * Translates a Java identifier into its Python equivalent.
- *
- * @param identifier {string}
- * @param locals {Array} of {string}s, local variables
- * @param cls {Class} object
- * @param type {string} type of class element that is translated
- *
- * @returns {string}
- */
-function translateIdentifier(identifier, locals, cls, type) {
-  var dot = identifier.split('.');
-  var first = dot[0];
-  if (first == 'this') {
-    var result = cls.get(type, dot[1], {static: false});
-    if (result) dot[0] = 'self';
-    else return undefined;
-  } else if (first == cls.name) {
-    var result = cls.get(type, dot[1], {static: true});
-    if (!result) return undefined;
-  } else if (locals.indexOf(first) == -1) {
-    var variable = cls.get(type, first);
-    if (variable) dot.unshift('self');
-    else return undefined;
-  }
-  return dot.join('.');
-}
-
-/**
- * Indents the entire codeblock provided by one 'TAB', as defined at
- * the top of the module. Tabs along newlines.
- *
- * @param code {string} Python code
- *
- * @return {string} indented code
- */
-function tab(code) {
-  return TAB + code.replace(/\n/g, '\n' + TAB);
-}
-
 
 /**
  * Writes a complete expression.
@@ -378,7 +389,7 @@ function writeExpr(line, locals, cls) {
     } else if (token.search(/".*"/) == 0) {
       expr.push(token);
     } else {
-      var identifier = translateIdentifier(token, locals, cls, 'var');
+      var identifier = writeIdentifier(token, locals, cls, 'var');
       if (identifier) expr.push(identifier);
       else if (OPERATORS.indexOf(token) != -1
           && OPERATORS.indexOf(expr[expr.length - 1] == -1))
@@ -389,6 +400,54 @@ function writeExpr(line, locals, cls) {
   if (expr.length == 0) return '';
   return expr.join(' ');
 }
+
+/**
+ * Translates a Java identifier into its Python equivalent.
+ *
+ * @param identifier {string}
+ * @param locals {Array} of {string}s, local variables
+ * @param cls {Class} object
+ * @param type {string} type of class element that is translated
+ *
+ * @returns {string}
+ */
+function writeIdentifier(identifier, locals, cls, type) {
+  var dot = identifier.split('.');
+  var first = dot[0];
+  if (first == 'this') {
+    var result = cls.get(type, dot[1], {static: false});
+    if (result) dot[0] = 'self';
+    else return undefined;
+  } else if (first == cls.name) {
+    var result = cls.get(type, dot[1], {static: true});
+    if (!result) return undefined;
+  } else if (locals.indexOf(first) == -1) {
+    var variable = cls.get(type, first);
+    if (variable) dot.unshift('self');
+    else return undefined;
+  }
+  return dot.join('.');
+}
+
+
+
+/*-------------*
+ * SUBROUTINES *
+ *-------------*/
+
+/**
+ * Indents the entire codeblock provided by one 'TAB', as defined at
+ * the top of the module. Tabs along newlines.
+ *
+ * @param code {string} Python code
+ *
+ * @return {string} indented code
+ */
+function tab(code) {
+  return TAB + code.replace(/\n/g, '\n' + TAB);
+}
+
+
 
 /*--------------------*
  * INTERACTIVE PROMPT *

@@ -30,6 +30,9 @@ var DATATYPES = [
   'boolean', 'byte', 'char', 'double', 'float', 'int', 'long', 'short',
 ]
 
+/*-------------*
+ * SUBROUTINES *
+ *-------------*/
 
 /**
  * Validates an identifier. A valid Java identifer must:
@@ -55,9 +58,13 @@ function validate(name, identifier) {
   return true;
 }
 
+/**
+ * @returns {bool} true if the token is a valid integer or decimal
+ */
 function isNumber(token) {
   return token.search(/\d+/) == 0 || token.search(/\d*\.\d+/) == 0;
 }
+
 
 /*--------------*
  * TOKEN BUFFER *
@@ -66,7 +73,7 @@ function isNumber(token) {
 /**
  * Buffer containing tokens. Converts a string of Java code into
  * tokens and stores it. Alternatively, takes an Array and makes it a
- * buffer. {shift} and {get} operations will take care of unexpected 
+ * buffer. {shift} and {get} operations will take care of unexpected
  * EOF by throwing ParseExceptions.
  *
  * @param code {string} or {Array}
