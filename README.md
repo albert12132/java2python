@@ -27,8 +27,9 @@ Issues and improvements
     * `while`
     * `for`
     * ` ? : `
-* Hashtables -> dictionaries
+* Data Structures:
+    * Arrays -> lists
+    * Hashtables -> dictionaries
 * Web interface options:
     * optimizations (e.g. method overloading)
-    * loose syntax (i.e. only issue compiler *warnings* if possible)
 * Syntax highlighting
