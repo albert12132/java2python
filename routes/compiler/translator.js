@@ -2,9 +2,9 @@
  * TRANSLATOR
  *
  * This module translates class {Object}s (see interface.js) into
- * Python code. This module mainly consists of 2 types of functions: 
- * translators and writers. 
- * 
+ * Python code. This module mainly consists of 2 types of functions:
+ * translators and writers.
+ *
  * Translators are used for larger, 'complete' sections of code:
  *    - entire Class
  *    - Class variables
@@ -28,11 +28,12 @@
 var interface = require('./interface')
   , Tokens = interface.Tokens
   , isNumber = interface.isNumber
-  , validate = interface.validate;
+  , validate = interface.validate
+  , logError = interface.logError;
 var TAB = '    ';
 var CONTROLS = [];
 var OPERATORS = ['+', '-', '*', '/', '(', ')'];
-
+var FATAL;
 
 /*---------*
  * EXPORTS *
@@ -46,7 +47,8 @@ var OPERATORS = ['+', '-', '*', '/', '(', ')'];
  *
  * @return {string} Python code
  */
-function translate(classes) {
+function translate(classes, fatal) {
+  FATAL = fatal;
   var pycode = '';
   classes.forEach(function(cls) {
     pycode += translateClass(cls);
@@ -259,21 +261,22 @@ function writeBody(stmts, params, cls) {
     var second = line.shift();
     if (first == 'new') {
       var result = writeConstructorCall(line, second, locals, cls);
-      if (!line.empty()) throw 'unexpected token ' + line.get(0);
+      if (!line.empty()) logError(true, 'Unexpected ' + line.get(0));
       return result;
     } else if (second == '(') {
       var result = writeMethodCall(line, first, locals, cls);
-      if (!line.empty()) throw 'unexpected token ' + line.get(0);
+      if (!line.empty()) logError(true, 'Unexpected ' + line.get(0));
       return result;
     } else if (second == '=') {
       return writeAssignment(line, first, locals, cls);
     } else if (line.shift('=') == '=') {
-      if (locals.indexOf(second) != -1) throw second + ' exists';
+      if (locals.indexOf(second) != -1)
+        logError(FATAL, second + ' is already a local variable');
+      else locals.push(second);
       validate(first); validate(second);
-      locals.push(second);
       return writeAssignment(line, second, locals, cls);
     } else {
-      throw 'Not a statement'
+      logError(FATAL, 'Not a statment');
     }
   });
   return body.join('\n');
@@ -294,11 +297,12 @@ function writeBody(stmts, params, cls) {
  */
 function writeAssignment(line, identifier, locals, cls) {
   var value = writeExpr(line, locals, cls);
-  if (!value || value == '') throw 'Invalid expression';
+  if (!value || value == '') logError(true, 'Invalid expression');
 
   var identifier = writeIdentifier(identifier, locals, cls, 'var');
-  if (!identifier) throw 'Invaild identifier';
-  else if (identifier == 'this') throw "Can't reassign 'this'";
+  if (!identifier) logError(true, 'Invaild identifier');
+  else if (identifier == 'this')
+    logError(FATAL, "Can't reassign 'this'");
   return identifier + ' = ' + value;
 }
 
@@ -316,7 +320,7 @@ function writeAssignment(line, identifier, locals, cls) {
 function writeMethodCall(line, identifier, locals, cls) {
   if (identifier == 'System.out.println') identifier = 'print';
   else identifier = writeIdentifier(identifier, locals, cls, 'method');
-  if (!identifier) throw 'Invalid method';
+  if (!identifier) logError(true, 'Invalid method');
   var args = writeArgs(line, locals, cls);
   return identifier + args;
 }
@@ -333,9 +337,9 @@ function writeMethodCall(line, identifier, locals, cls) {
 function writeConstructorCall(line, identifier, locals, cls) {
   validate(identifier);
   if (identifier == 'this' || identifier.indexOf('.') != -1)
-    throw 'Invalid constructor';
+    logError(true, 'Invalid constructor');
   if (line.shift('(') != '(')
-    throw 'Invalid constructor';
+    logError(true, 'Invalid constructor');
   var args = writeArgs(line, locals, cls);
   return identifier + args;
 }
@@ -379,7 +383,8 @@ function writeExpr(line, locals, cls) {
     var token = line.shift();
     if (isNumber(token)) {
       if (expr.length > 0 && isNumber(expr[expr.length - 1]))
-        throw 'invalid expression: ' + expr + token;
+        logError(true, 'invalid expression: ' + expr + token
+            + line.join(' '));
       expr.push(token);
     } else if (token == 'new') {
       expr.push(writeConstructorCall(line, line.shift(), locals, cls));
@@ -401,7 +406,10 @@ function writeExpr(line, locals, cls) {
       } else if (OPERATORS.indexOf(token) != -1
           && OPERATORS.indexOf(expr[expr.length - 1] == -1))
           expr.push(token)
-      else throw 'invalid expression: ' + expr + token;
+      else {
+        logError(true, 'Invalid expression: ' + expr + token
+            + line.join(' '));
+      }
     }
   }
   if (expr.length == 0) return '';
@@ -471,8 +479,8 @@ function run() {
   rl.prompt();
 
   rl.on('line', function(code) {
-    var classes = parse(code);
-    console.log(translate(classes));
+    var classes = parse(code, true);
+    console.log(translate(classes, true));
     rl.prompt();
   });
 }

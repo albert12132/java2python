@@ -47,14 +47,14 @@ var DATATYPES = [
  *
  * @throws ParseException
  */
-function validate(name, identifier) {
-  if (typeof name == 'undefined') throw new Exception(name);
+function validate(name, identifier, fatal) {
+  if (typeof name == 'undefined') logError(fatal, 'Expected name');
   else if (KEYWORDS.indexOf(name) != -1)
-    throw new ParseException(name, null, name + ' is a keyword');
+    logError(true, name + ' is a keyword');
   else if (identifier && DATATYPES.indexOf(name) != -1)
-    throw new ParseException(name, null, name + ' is a keyword');
+    logError(fatal, name + ' is a keyword (datatype)');
   else if (name.search(/^[a-zA-Z_]\w*$/) == -1)
-    throw new ParseException(name, null, name + ' is an invalid name');
+    logError(fatal, name + ' is an invalid name');
   return true;
 }
 
@@ -63,6 +63,40 @@ function validate(name, identifier) {
  */
 function isNumber(token) {
   return token.search(/\d+/) == 0 || token.search(/\d*\.\d+/) == 0;
+}
+
+
+/*------------*
+ * Exceptions *
+ *------------*/
+
+/**
+ * Logs an error.
+ *
+ * @param fatal {bool} if true, throw an exception. Otherwise just log
+ *              to terminal
+ * @param msg {string} error message
+ */
+function logError(fatal, msg) {
+  if (fatal) throw msg;
+  else console.log('WARNING: ' + msg);
+}
+
+/**
+ * Logs a Parsing error.
+ *
+ * @param fatal {bool} if true, throw an exception. Otherwise, just log
+ *              to terminal
+ * @param actual {string} actual token encountered
+ * @param expected {string} expected token
+ * @param msg {string} error message
+ */
+function logParseError(fatal, actual, expected, msg) {
+  var message = '';
+  if (actual) message += 'Unexpected "' + actual + '". ';
+  if (expected) message += 'Expected "' + expected + '". ';
+  if (msg) message += msg;
+  logError(fatal, message);
 }
 
 
@@ -134,7 +168,7 @@ Tokens.prototype.empty = function() {
  */
 Tokens.prototype.get = function(index, expect) {
   if (typeof this.tokens[index] == 'undefined')
-    throw new ParseException('EOF', expect);
+    logParseError(true, 'EOF', expect);
   return this.tokens[index];
 };
 
@@ -150,7 +184,7 @@ Tokens.prototype.get = function(index, expect) {
  */
 Tokens.prototype.shift = function(expect) {
   if (this.tokens.length == 0)
-    throw new ParseException('EOF', expect);
+    logParseError(true, 'EOF', expect);
   return this.tokens.shift();
 };
 
@@ -159,34 +193,6 @@ Tokens.prototype.shift = function(expect) {
  */
 Tokens.prototype.unshift = function(item) {
   return this.tokens.unshift(item);
-};
-
-
-/*------------*
- * Exceptions *
- *------------*/
-
-/**
- * Exception used by the Parser. Raised when unexpected tokens are
- * encountered.
- *
- * @param actual {string} the actual token encountered.
- * @param expect {string} the expected token
- * @param msg {string} a custom error message
- */
-function ParseException(actual, expect, msg) {
-  this.type = 'ParseException';
-  this.msg = '';
-  if (actual) this.msg += 'Unexpected "' + actual + '". ';
-  if (expect) this.msg += 'Expected "' + expect + '". ';
-  if (msg) this.msg += msg;
-}
-
-/**
- * toString method
- */
-ParseException.prototype.toString = function() {
-  return this.msg;
 };
 
 
@@ -372,6 +378,8 @@ exports.KEYWORDS = KEYWORDS;
 exports.DATATYPES = DATATYPES;
 exports.validate = validate;
 exports.isNumber = isNumber;
+exports.logError = logError;
+exports.logParseError = logParseError;
 exports.Tokens = Tokens;
 exports.ParseException = ParseException;
 exports.Class = Class;

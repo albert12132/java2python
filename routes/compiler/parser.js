@@ -20,8 +20,9 @@ var interface = require('./interface')
   , Class = interface.Class
   , Variable = interface.Variable
   , Method = interface.Method
-  , Exception = interface.ParseException;
-
+  , logError = interface.logError
+  , logParseError = interface.logParseError;
+var FATAL;
 
 /*---------*
  * EXPORTS *
@@ -37,14 +38,15 @@ var interface = require('./interface')
  *
  * @throws ParseException
  */
-function parse(code) {
+function parse(code, fatal) {
+  FATAL = fatal;
   if (!code) return [];
   var buffer = new Tokens(code), classes = [];
   while (!buffer.empty()) {
     var cls = readClass(buffer);
     classes.forEach(function(x) {
       if (x.name == cls.name)
-        throw new Exception(cls.name, null, 'Class already defined');
+        logError(true, 'Class ' + cls.name + ' already exists');
     });
     classes.push(cls);
   }
@@ -76,12 +78,12 @@ function readClass(buffer, modifiers) {
   // modifier checks
   var mods = modifiers || parseModifiers(buffer);
   if (!mods.public)
-    throw new Exception('private', null, "Classes can't be private");
+    logParseError(FATAL, 'private', null, "Classes can't be private");
   else if (mods.static)
-    throw new Exception('static', null, "Classes can't be static");
+    logParseError(FATAL, 'static', null, "Classes can't be static");
 
   var token = buffer.shift('class');
-  if (token != 'class') throw new Exception(token, 'class');
+  if (token != 'class') logParseError(true, token, 'class');
 
   var cls = new Class(buffer.shift('<identifier>'));
   validate(cls.name, true);
@@ -94,7 +96,7 @@ function readClass(buffer, modifiers) {
   }
 
   // parse class body
-  if (token != '{') throw new Exception(token, '{');
+  if (token != '{') logParseError(true, token, '{');
   while (buffer.get(0, '}') != '}') readDeclare(buffer, cls);
   buffer.shift('}');
   return cls;
@@ -131,7 +133,7 @@ function readDeclare(buffer, cls) {
   validate(datatype);
 
   if (buffer.get(0, '(') == '(') { // expect it to be a constructor
-    if (datatype != cls.name) throw new Exception('(');
+    if (datatype != cls.name) logParseError(true, '(');
     else var name = '__init__';
   } else var name = buffer.shift('<identifier>');
 
@@ -150,7 +152,7 @@ function readDeclare(buffer, cls) {
     cls.add(new Variable(mods, name, value));
     if (token == ',') name = buffer.shift('<identifier>');
   } while (token == ',');
-  if (token != ';') throw new Exception(token, ';');
+  if (token != ';') logParseError(true, token, ';');
 }
 
 /**
@@ -198,31 +200,31 @@ function parseModifiers(buffer) {
  */
 function parseArgs(buffer) {
   var token = buffer.shift('(');
-  if (token != '(') throw new Exception(token, '(');
+  if (token != '(') logParseError(true, token, '(');
 
   if (buffer.get(0, ')') == ')') { buffer.shift(); return []; }
 
   var args = [];
   while (token != ')') {
-    if (token != '(' && token != ',') throw new Exception(token);
+    if (token != '(' && token != ',') logParseError(true, token);
     validate(buffer.shift('<datatype>')); // datatype
     if (buffer.get(0, '<identifier>') == '[') {
       buffer.shift();
       if (buffer.get(0, ']') != ']')
-        throw new Exception(buffer.shift(), ']');
+        logParseError(true, buffer.shift(), ']');
       buffer.shift();
     }
 
     name = buffer.shift('<identifier>');
     if (args.indexOf(name) != -1)
-      throw new Exception(name, null, 'Already defined');
+      logParseError(true, name, null, 'Already defined');
     validate(name, true);
     args.push(name);
 
     if (buffer.get(0, ',') == '[') {
       buffer.shift();
       if (buffer.get(0, ']') != ']')
-        throw new Exception(buffer.shift(), ']');
+        logParseError(true, buffer.shift(), ']');
       buffer.shift();
     }
 
@@ -244,7 +246,7 @@ function parseArgs(buffer) {
  */
 function parseBody(buffer) {
   var token = buffer.shift('{');
-  if (token != '{') throw new Exception(token, '{');
+  if (token != '{') logParseError(true, token, '{');
 
   var body = [];
   while (buffer.get(0, '}') != '}') {
@@ -277,7 +279,7 @@ function parseBody(buffer) {
 function readStatement(buffer) {
   var stmt = [], token = buffer.shift(';');
   while (token != ';') {
-    if (token == '}') throw new Exception('}');
+    if (token == '}') logParseError(true, '}');
     stmt.push(token);
     token = buffer.shift();
   }
@@ -341,7 +343,7 @@ function run() {
   rl.prompt();
 
   rl.on('line', function(code) {
-    console.log(parse(code));
+    console.log(parse(code, true));
     rl.prompt();
   });
 }
