@@ -30,3 +30,5 @@ Issues and improvements
 * Hashtables -> dictionaries
 * Web interface options:
     * optimizations (e.g. method overloading)
+    * loose syntax (i.e. only issue compiler *warnings* if possible)
+* Syntax highlighting
