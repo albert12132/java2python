@@ -391,9 +391,9 @@ function writeExpr(line, locals, cls) {
     } else {
       var identifier = writeIdentifier(token, locals, cls, 'var');
       if (identifier) {
-        if (line.get(0) == '[' && isNumber(line.get(1)) 
+        if (line.get(0) == '[' && isNumber(line.get(1))
             && line.get(2) == ']') {
-          expr.push(identifier + line.shift() + line.shift() 
+          expr.push(identifier + line.shift() + line.shift()
               + line.shift());
         } else {
           expr.push(identifier);
