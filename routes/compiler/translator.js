@@ -390,8 +390,15 @@ function writeExpr(line, locals, cls) {
       expr.push(token);
     } else {
       var identifier = writeIdentifier(token, locals, cls, 'var');
-      if (identifier) expr.push(identifier);
-      else if (OPERATORS.indexOf(token) != -1
+      if (identifier) {
+        if (line.get(0) == '[' && isNumber(line.get(1)) 
+            && line.get(2) == ']') {
+          expr.push(identifier + line.shift() + line.shift() 
+              + line.shift());
+        } else {
+          expr.push(identifier);
+        }
+      } else if (OPERATORS.indexOf(token) != -1
           && OPERATORS.indexOf(expr[expr.length - 1] == -1))
           expr.push(token)
       else throw 'invalid expression: ' + expr + token;

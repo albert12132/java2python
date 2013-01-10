@@ -206,12 +206,25 @@ function parseArgs(buffer) {
   while (token != ')') {
     if (token != '(' && token != ',') throw new Exception(token);
     validate(buffer.shift('<datatype>')); // datatype
+    if (buffer.get(0, '<identifier>') == '[') {
+      buffer.shift();
+      if (buffer.get(0, ']') != ']')
+        throw new Exception(buffer.shift(), ']');
+      buffer.shift();
+    }
 
     name = buffer.shift('<identifier>');
-    if (args.indexOf(name) != -1) 
+    if (args.indexOf(name) != -1)
       throw new Exception(name, null, 'Already defined');
     validate(name, true);
     args.push(name);
+
+    if (buffer.get(0, ',') == '[') {
+      buffer.shift();
+      if (buffer.get(0, ']') != ']')
+        throw new Exception(buffer.shift(), ']');
+      buffer.shift();
+    }
 
     token = buffer.shift();
   }

@@ -13,7 +13,7 @@
  *      - Variable
  *-------------------------------------------------------------------*/
 
-var DELIMS = ['{', '}', '(', ')', ';', ',', '='];
+var DELIMS = ['{', '}', '(', ')', '[', ']', ';', ',', '='];
 var KEYWORDS = [
   'public', 'private', 'protected',
   'static', // 'abstract', 'final',
@@ -50,11 +50,11 @@ var DATATYPES = [
 function validate(name, identifier) {
   if (typeof name == 'undefined') throw new Exception(name);
   else if (KEYWORDS.indexOf(name) != -1)
-    throw new Exception(name, null, name + ' is a keyword');
+    throw new ParseException(name, null, name + ' is a keyword');
   else if (identifier && DATATYPES.indexOf(name) != -1)
-    throw new Exception(name, null, name + ' is a keyword');
+    throw new ParseException(name, null, name + ' is a keyword');
   else if (name.search(/^[a-zA-Z_]\w*$/) == -1)
-    throw new Exception(name, null, name + ' is an invalid name');
+    throw new ParseException(name, null, name + ' is an invalid name');
   return true;
 }
 
