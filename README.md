@@ -32,3 +32,4 @@ Issues and improvements
     * turning on/off protection modifiers
     * optimizations (e.g. method overloading)
     * loose syntax (i.e. only issue compiler *warnings* if possible)
+* Syntax highlighting
