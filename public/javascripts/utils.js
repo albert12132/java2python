@@ -5,7 +5,7 @@
 
 $(document).ready(function() {
   $('#compile').click(function() {
-    var jcode = $('#jcode').val();
+    var jcode = getValue('jcode');
     if (!jcode || jcode.trim() == '') {
       alert('Nothing to compile!');
     } else {
@@ -16,7 +16,7 @@ $(document).ready(function() {
           fatal: $('#warning:checked').val() ? false : true,
         },
         function(data) {
-          $('#pycode').text(data);
+          setValue('pycode', data);
       });
     }
     return false;
@@ -25,12 +25,12 @@ $(document).ready(function() {
   var optionsOff = true;
   $('#options').click(function() {
     if (optionsOff) {
-      $('textarea[name="jcode"]').fadeOut(200, function() {
+      $('#jcode').fadeOut(200, function() {
         $('#options-div').fadeIn(200);
       });
     } else {
       $('#options-div').fadeOut(200, function() {
-        $('textarea[name="jcode"]').fadeIn(200)
+        $('#jcode').fadeIn(200)
       });
     }
     optionsOff = !optionsOff;

@@ -2,6 +2,15 @@ extends layout
 
 block css
   link(rel='stylesheet', href='stylesheets/index.css')
+  style(type='text/css', media='screen').
+    .editor {
+        text-align:left;
+        position:absolute;
+        top: 48px;
+        right: 20px;
+        bottom: 20px;
+        left: 20px;
+    }
 
 block content
   #compiler
@@ -11,7 +20,10 @@ block content
         h2.title-button#compile Compile
         h2.title-button#options Options
       .code
-        textarea(name='jcode', id='jcode')
+        #jcode.editor.
+          class Ex {
+            
+          }
         form#options-div
           .option-box
             input(type='checkbox',id='private') 
@@ -24,8 +36,12 @@ block content
         h2.title-name Python
         h2.title-button#export Export
       .code
-        textarea(name='pycode', id='pycode', readonly)
+        #pycode.editor.
+          class Ex(object):
+              pass
 
 block scripts
   script(src='/javascripts/jquery.js')
   script(src='/javascripts/utils.js')
+  script(src="http://d1n0x3qji82z53.cloudfront.net/src-min-noconflict/ace.js",type="text/javascript",charset="utf-8")
+  script(src='/javascripts/editors.js')
