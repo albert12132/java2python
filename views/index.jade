@@ -22,11 +22,13 @@ block content
       .code
         #jcode.editor.
           class Ex {
-            
+              public static void main(String args[]) {
+                  System.out.println("hi");
+              }
           }
         form#options-div
           .option-box
-            input(type='checkbox',id='private') 
+            input(type='checkbox',id='private')
             | translate private modifiers as '_' variables
           .option-box
             input(type='checkbox',id='warning',checked)
@@ -38,7 +40,8 @@ block content
       .code
         #pycode.editor.
           class Ex(object):
-              pass
+              def main(self, args):
+                  print("hi")
 
 block scripts
   script(src='/javascripts/jquery.js')

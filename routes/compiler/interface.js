@@ -13,7 +13,8 @@
  *      - Variable
  *-------------------------------------------------------------------*/
 
-var DELIMS = ['{', '}', '(', ')', '[', ']', ';', ',', '='];
+var DELIMS = ['{', '}', '(', ')', '[', ']', ';', ',', '=', 
+    '"', '*', '/'];
 var KEYWORDS = [
   'public', 'private', 'protected',
   'static', // 'abstract', 'final',
@@ -48,14 +49,17 @@ var DATATYPES = [
  * @throws ParseException
  */
 function validate(name, identifier, fatal) {
-  if (typeof name == 'undefined') logError(fatal, 'Expected name');
+  var msg;
+  if (typeof name == 'undefined')
+    msg = 'Expected name';
   else if (KEYWORDS.indexOf(name) != -1)
-    logError(true, name + ' is a keyword');
+    msg = name + ' is a keyword';
   else if (identifier && DATATYPES.indexOf(name) != -1)
-    logError(fatal, name + ' is a keyword (datatype)');
+    msg = name + ' is a keyword (datatype)';
   else if (name.search(/^[a-zA-Z_]\w*$/) == -1)
-    logError(fatal, name + ' is an invalid name');
-  return true;
+    msg = name + ' is an invalid name';
+  if (fatal && msg) logError(msg);
+  return msg ? false : true;
 }
 
 /**
@@ -140,11 +144,22 @@ Tokens.prototype.join = function(delim) {
  * @returns {Array} of strings, referred to as 'tokens'
  */
 Tokens.tokenize = function(code) {
+  code = code.replace(/\/\/.*\n/g, '');
   code = code.replace(/\n/g, ' ');
-  for (var i = 0; i < DELIMS.length; i++) {
-    code = code.replace(new RegExp('\\' + DELIMS[i], 'g'),
-        ' ' + DELIMS[i] + ' ');
-  }
+  code = code.replace(/\+\+/g, ' ++ ').replace(/--/g, ' -- ');
+  code = code.replace(/([^+])\+([^+])/g, function(match, p1, p2) {
+    return p1 + ' + ' + p2;
+  });
+  code = code.replace(/([^-])-([^-])/g, function(match, p1, p2) {
+    return p1 + ' - ' + p2;
+  });
+  code = code.replace(/([^\d])\.([^\d])/, function(match, p1, p2) {
+    return p1 + ' . ' + p2;
+  });
+  DELIMS.forEach(function(delim) {
+    var regex = new RegExp('\\' + delim, 'g');
+    code = code.replace(regex, ' ' + delim + ' ');
+  });
   return code.split(' ').filter(function(x) { return x != ''; });
 };
 
@@ -344,6 +359,7 @@ Class.prototype.add = function(item) {
  * Represents a Variable
  *
  * @param mods {Object} modifiers, including protection and static
+ * @param datatype {string}
  * @param name {string} name of variable
  * @param value {null} if variable has no value
  */
@@ -357,8 +373,9 @@ function Variable(mods, name, value) {
  * Represents a Method/Constructor.
  *
  * @param mods {Object} modifiers, including protection and static
+ * @param datatype {string} return type of method
  * @param name {string} name of method, or '__init__' for constructors
- * @param args {Array} of parameter names
+ * @param args {Array} of {Objects} -- name/datatype pairs
  * @param body {Array}
  */
 function Method(mods, name, args, body) {

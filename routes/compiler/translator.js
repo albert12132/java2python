@@ -32,7 +32,7 @@ var interface = require('./interface')
   , logError = interface.logError;
 var TAB = '    ';
 var CONTROLS = [];
-var OPERATORS = ['+', '-', '*', '/', '(', ')'];
+var OPERATORS = ['+', '-', '*', '/', '('];
 var FATAL, privMod = false;
 
 /*---------*
@@ -129,7 +129,7 @@ function translateConstructors(cls) {
   var signature = writeSignature('__init__', constructors);
 
   var instanceVars = [];
-  cls.getAll('variables', {static: false}).forEach(function(variable) {
+  cls.getAll('variable', {static: false}).forEach(function(variable) {
     if (variable.value == null) return;
     var line = !variable.mods.public && privMod ? 'self._' : 'self.';
     line += variable.name  + ' = ' + writeExpr(variable.value, [], cls);
@@ -257,117 +257,84 @@ function writeBody(stmts, params, cls) {
       else return 'return ' + writeExpr(line, locals, cls);
     } else if (CONTROLS.indexOf(first) != -1) {
       // TODO
+      return;
     }
 
-    var second = line.shift();
+    var declare = false;
     if (first == 'new') {
-      var result = writeConstructorCall(line, second, locals, cls);
-      if (!line.empty()) logError(true, 'Unexpected ' + line.get(0));
-      return result;
-    } else if (second == '(') {
-      var result = writeMethodCall(line, first, locals, cls);
-      if (!line.empty()) logError(true, 'Unexpected ' + line.get(0));
-      return result;
-    } else if (second == '=') {
-      return writeAssignment(line, first, locals, cls);
-    } else if (line.shift('=') == '=') {
-      if (locals.indexOf(second) != -1)
-        logError(FATAL, second + ' is already a local variable');
-      else locals.push(second);
-      validate(first); validate(second);
-      return writeAssignment(line, second, locals, cls);
+      first = line.shift('<constructor>');
+      cons = true;
+    } else if (validate(line.get(0), true, false)) {
+      validate(first);
+      first = line.shift('<identifier>');
+      locals.push(first);
+      declare = true;
+    }
+    if (!declare)
+      first = writeIdentifier(first, line, locals, cls);
+
+    var special = writeSpecial(first);
+    if (special) return special;
+    if (!line.empty() && line.get(0, '=') == '=') {
+      line.shift('=');
+      var value = writeExpr(line, locals, cls);
+      if (value && value != '') return first + ' = ' + value;
+      else logError('writeBody'); // TODO
+    } else if (!line.empty() && declare) {
+      logError('writeBody2');
+    } else if (!line.empty()) {
+      logError('writeBody3');
     } else {
-      logError(FATAL, 'Not a statment');
+      return first;
     }
   });
   return body.join('\n');
 }
 
-/**
- * Writes a variable assignment. Invalid assignments include:
- *    - assigning to nothing
- *    - assigning to 'this'
- *    - assigning nothing (literally lack of a value)
- *
- * @param line {Tokens}
- * @param identifier {string} variable to be assigned
- * @param locals {Array} of {string}s, the local variables
- * @param cls {Class} object
- *
- * @returns {string} of code
- */
-function writeAssignment(line, identifier, locals, cls) {
-  var value = writeExpr(line, locals, cls);
-  if (!value || value == '') logError(true, 'Invalid expression');
-
-  var identifier = writeIdentifier(identifier, locals, cls, 'var');
-  if (!identifier) logError(true, 'Invaild identifier');
-  else if (identifier == 'this')
-    logError(FATAL, "Can't reassign 'this'");
-  return identifier + ' = ' + value;
-}
-
-/**
- * Writes a method call. A method call has the following format:
- *    [object.]<method name>( [arg1] [, arg2] [, ...] );
- *
- * @param line {Tokens}
- * @param identifier {string} method name
- * @param locals {Array} of {string}s, the local variables
- * @param cls {Class} object
- *
- * @returns {string} of code
- */
-function writeMethodCall(line, identifier, locals, cls) {
-  if (identifier == 'System.out.println') identifier = 'print';
-  else identifier = writeIdentifier(identifier, locals, cls, 'method');
-  if (!identifier) logError(true, 'Invalid method');
-  var args = writeArgs(line, locals, cls);
-  return identifier + args;
-}
-
-
-/**
- * Writes a constructor call.
- *
- * @param line {Tokens}
- * @param identifier {string}, cosntructor name
- *
- * @returns {string}
- */
-function writeConstructorCall(line, identifier, locals, cls) {
-  validate(identifier);
-  if (identifier == 'this' || identifier.indexOf('.') != -1)
-    logError(true, 'Invalid constructor');
-  if (line.shift('(') != '(')
-    logError(true, 'Invalid constructor');
-  var args = writeArgs(line, locals, cls);
-  return identifier + args;
-}
-
-
-/**
- * Translates the arguments of a method or constructor call. Assumes
- * the opening ( has been removed from the line.
- *
- * @param line {Tokens}
- *
- * @return {string}
- */
-function writeArgs(line, locals, cls) {
-  var args = [], token = line.shift(')');
-  while (token != ')') {
-    var expr = [];
-    while (token != ',' && token != ')') {
-      expr.push(token);
-      token = line.shift();
+function writeIdentifier(first, line, locals, cls) {
+  validate(first);
+  if (first == 'this') first = 'self';
+  else if (locals.indexOf(first) == -1) {
+    var attr = cls.get('v', first) || cls.get('m', first);
+    if (attr) {
+      if (attr.mods.static) first = cls.name + '.' + first;
+      else first = 'self.' + first;
     }
-    args.push(writeExpr(new Tokens(expr), locals, cls));
-    if (token == ')') break;
-    token = line.shift(')');
   }
-  return '(' + args.join(', ') + ')';
+  if (line.empty()) return first;
+  var identifier = [];
+  var next = line.shift();
+  while (next == '.' || next == '(' || next == '[') {
+    if (next == '.') {
+      identifier.push(first);
+      first = line.shift();
+      validate(first);
+    } else if (next == '(') {
+      var args = []; line.unshift('(');
+      while (line.get(0, ')') != ')') {
+        var token = line.shift(',');
+        if (token != '(' && token != ',') logError('writeIdentifier'); // TODO
+        if (line.get(0) == ')') break;
+        args.push(writeExpr(line, locals, cls));
+      }
+      line.shift();
+      first += '(' + args.join(', ') + ')';
+    } else if (next == '[') {
+      var index = writeExpr(line);
+      line.shift(']');
+      first += '[' + index + ']';
+    }
+    if (line.empty()) {
+      identifier.push(first);
+      return identifier.join('.');
+    }
+    else next = line.shift();
+  }
+  identifier.push(first);
+  line.unshift(next);
+  return identifier.join('.');
 }
+
 
 /**
  * Writes a complete expression.
@@ -379,77 +346,37 @@ function writeArgs(line, locals, cls) {
  * @return {string} of code
  */
 function writeExpr(line, locals, cls) {
-  var expr = [];
-  while (!line.empty()) {
-    var token = line.shift();
-    if (isNumber(token)) {
-      if (expr.length > 0 && isNumber(expr[expr.length - 1]))
-        logError(true, 'invalid expression: ' + expr + token
-            + line.join(' '));
-      expr.push(token);
-    } else if (token == 'new') {
-      expr.push(writeConstructorCall(line, line.shift(), locals, cls));
-    } else if (!line.empty() && line.get(0) == '(') {
-      line.shift();
-      expr.push(writeMethodCall(line, token, locals, cls));
-    } else if (token.search(/".*"/) == 0) {
-      expr.push(token);
-    } else {
-      var identifier = writeIdentifier(token, locals, cls, 'var');
-      if (identifier) {
-        if (line.get(0) == '[' && isNumber(line.get(1))
-            && line.get(2) == ']') {
-          expr.push(identifier + line.shift() + line.shift()
-              + line.shift());
-        } else {
-          expr.push(identifier);
-        }
-      } else if (OPERATORS.indexOf(token) != -1
-          && OPERATORS.indexOf(expr[expr.length - 1] == -1))
-          expr.push(token)
-      else {
-        logError(true, 'Invalid expression: ' + expr + token
-            + line.join(' '));
-      }
+  var token = line.shift(), expr;
+  if (isNumber(token)) {
+    expr = token;
+  } else if (token == '"') {
+    var str = [];
+    token = line.shift();
+    while (token != '"') {
+      str.push(token);
+      token = line.shift();
     }
+    expr = '"' + str.join(' ') + '"';
+  } else if (token == 'true') {
+    expr = 'True';
+  } else if (token == 'false') {
+    expr = 'False';
+  } else if (token == 'new') {
+    expr = writeIdentifier(line.shift(), line, locals, cls);
+  } else {
+    expr = writeIdentifier(token, line, locals, cls);
   }
-  if (expr.length == 0) return '';
-  return expr.join(' ');
+  if (!line.empty() && OPERATORS.indexOf(line.get(0)) != -1) {
+    var op = line.shift();
+    expr += ' ' + op + ' ' + writeExpr(line);
+  }
+  return expr;
 }
 
-/**
- * Translates a Java identifier into its Python equivalent.
- *
- * @param identifier {string}
- * @param locals {Array} of {string}s, local variables
- * @param cls {Class} object
- * @param type {string} type of class element that is translated
- *
- * @returns {string}
- */
-function writeIdentifier(identifier, locals, cls, type) {
-  var dot = identifier.split('.');
-  var first = dot[0];
-  if (first == 'this') {
-    var result = cls.get(type, dot[1], {static: false});
-    if (result) {
-      dot[0] = 'self';
-      if (!result.mods.public && privMod) dot[1] = '_' + dot[1];
-    }
-    else return undefined;
-  } else if (first == cls.name) {
-    var result = cls.get(type, dot[1], {static: true});
-    if (result && !result.mods.public && privMod) dot[1] = '_' +dot[1];
-    else if (!result) return undefined;
-  } else if (locals.indexOf(first) == -1) {
-    var variable = cls.get(type, first);
-    if (variable) {
-      dot.unshift('self');
-      if (!variable.mods.public && privMod) dot[1] = '_' + dot[1];
-    }
-    else return undefined;
+function writeSpecial(stmt) {
+  if (stmt.indexOf('System.out.println') == 0) {
+    return stmt.replace('System.out.println', 'print');
   }
-  return dot.join('.');
 }
 
 
@@ -469,7 +396,6 @@ function writeIdentifier(identifier, locals, cls, type) {
 function tab(code) {
   return TAB + code.replace(/\n/g, '\n' + TAB);
 }
-
 
 
 /*--------------------*

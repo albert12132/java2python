@@ -35,8 +35,6 @@ var FATAL;
  * @param code {string} can contain newlines
  *
  * @returns {Array} of Class objects
- *
- * @throws ParseException
  */
 function parse(code, fatal) {
   FATAL = fatal;
@@ -71,8 +69,6 @@ exports.parse = parse;
  * @param buffer {Tokens} of strings
  *
  * @returns {Class} object (see interface.js)
- *
- * @throws ParseException
  */
 function readClass(buffer, modifiers) {
   // modifier checks
@@ -103,8 +99,8 @@ function readClass(buffer, modifiers) {
 }
 
 /**
- * Reads a single complete declaraton found in the body of a class
- * (NOT a method). Valid declarations include:
+ * Reads a single complete declaraton found in the body of a class.
+ * Valid declarations include:
  *  - class declarations
  *      [public|protected] class [extends superclass] { <body> }
  *  - method declarations
@@ -120,8 +116,6 @@ function readClass(buffer, modifiers) {
  * @param cls {Class} object, which will be modified
 *
  * @returns nothing; instead, it mutates {cls}
- *
- * @throws ParseException
  */
 function readDeclare(buffer, cls) {
   var mods = parseModifiers(buffer);
@@ -132,8 +126,10 @@ function readDeclare(buffer, cls) {
   var datatype = buffer.shift();
   validate(datatype);
 
+  var isArray = parseArray(buffer, '(');
   if (buffer.get(0, '(') == '(') { // expect it to be a constructor
     if (datatype != cls.name) logParseError(true, '(');
+    else if (isArray) logParseError(FATAL, '[');
     else var name = '__init__';
   } else var name = buffer.shift('<identifier>');
 
@@ -145,10 +141,12 @@ function readDeclare(buffer, cls) {
 
   do {
     validate(name, true);
-    var token = buffer.shift();
+    var thisArray = parseArray(buffer) || isArray;
 
+    var token = buffer.shift();
     var value = token == '=' ? readExpr(buffer) : null;
     if (token == '=') token = buffer.shift(';');
+
     cls.add(new Variable(mods, name, value));
     if (token == ',') name = buffer.shift('<identifier>');
   } while (token == ',');
@@ -195,8 +193,6 @@ function parseModifiers(buffer) {
  * @param buffer {Tokens} of strings
  *
  * @return {Array} of parameter names (datatypes are discarded)
- *
- * @throws ParseException
  */
 function parseArgs(buffer) {
   var token = buffer.shift('(');
@@ -207,28 +203,18 @@ function parseArgs(buffer) {
   var args = [];
   while (token != ')') {
     if (token != '(' && token != ',') logParseError(true, token);
-    validate(buffer.shift('<datatype>')); // datatype
-    if (buffer.get(0, '<identifier>') == '[') {
-      buffer.shift();
-      if (buffer.get(0, ']') != ']')
-        logParseError(true, buffer.shift(), ']');
-      buffer.shift();
-    }
+    var datatype = buffer.shift('<datatype>');
+    validate(datatype);
+    parseArray(buffer, '<identifier>');
+    var name = buffer.shift('<identifier>');
 
-    name = buffer.shift('<identifier>');
     if (args.indexOf(name) != -1)
       logParseError(true, name, null, 'Already defined');
     validate(name, true);
-    args.push(name);
-
-    if (buffer.get(0, ',') == '[') {
-      buffer.shift();
-      if (buffer.get(0, ']') != ']')
-        logParseError(true, buffer.shift(), ']');
-      buffer.shift();
-    }
+    parseArray(buffer, ')');
 
     token = buffer.shift();
+    args.push(name);
   }
   return args;
 }
@@ -238,7 +224,7 @@ function parseArgs(buffer) {
  * brace is STILL IN THE BUFFER; i.e. the buffer should have the
  * following format:
  *  ['{', ... '}' ...]
- * The closing '}' will be removed from teh buffer.
+ * The closing '}' will be removed from the buffer.
  *
  * @param buffer {Tokens} of strings
  *
@@ -302,30 +288,34 @@ function readStatement(buffer) {
  * @param buffer {Tokens} of strings
  *
  * @return {Array} of strings (tokens)
- *
- * @throws ParseException
- * TODO
  */
 function readExpr(buffer) {
-  var operators = ['+', '-', '*', '/'];
   var expr = [];
   while (buffer.get(0, ';') != ';' && buffer.get(0) != ',') {
-    var token = buffer.shift();
-    token = token.replace(/\+\+/g, ' ++ ').replace(/--/g, ' -- ');
-    token.split(' ').forEach(function(str) {
-      if (str == '') return;
-      else if (str == '++' || str == '--') expr.push(str);
-      else {
-        operators.forEach(function(op) {
-          str=str.replace(new RegExp('\\' + op, 'g'), ' ' + op + ' ');
-        });
-        str.split(' ').forEach(function(tok) {
-          if (tok != '') expr.push(tok);
-        });
-      }
-    });
+    expr.push(buffer.shift());
   }
   return new Tokens(expr);
+}
+
+/**
+ * Pares the buffer for array syntax. The buffer should look like this:
+ *    [ '[', ']', ... ]
+ *
+ * The method will remove the braces from the buffer. If the buffer
+ * does not start with a '[', parseArray will not do anything.
+ *
+ * parseArray should only be used for class level declarations -- it
+ * does NOT parse method-level or expression-level array syntax. As
+ * such, it does NOT expect an index between the braces.
+ *
+ * @param buffer {Tokens}
+ * @param expect {string}, the expected token in case of an EOF
+ */
+function parseArray(buffer, expect) {
+  if (buffer.get(0, expect) != '[') return false;
+  buffer.shift();
+  if (buffer.shift(']') != ']') logParseError(null, ']');
+  else return true;
 }
 
 
