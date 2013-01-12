@@ -18,7 +18,8 @@ block content
       .title-bar
         h2.title-name Java
         h2.title-button#compile Compile
-        h2.title-button#options Options
+        // Options button
+          h2.title-button#options Options
       .code
         #jcode.editor.
           class Ex {
@@ -26,13 +27,14 @@ block content
                   System.out.println("hi");
               }
           }
-        #options-div
-          .option-box
-            input(type='checkbox',id='private')
-            | translate private modifiers as '_' variables
-          .option-box
-            input(type='checkbox',id='warning',checked)
-            | Ignore compiler errors if possible
+        //- Options
+          #options-div
+            .option-box
+              input(type='checkbox',id='private')
+              | translate private modifiers as '_' variables
+            .option-box
+              input(type='checkbox',id='warning',checked)
+              | Ignore compiler errors if possible
     #pythoncode
       .title-bar
         h2.title-name Python
@@ -48,7 +50,7 @@ block content
               import sys
               assert len(sys.argv) > 1
               if sys.argv[1] == "Ex":
-                  Ex.main(argv[2:])
+                  Ex.main(sys.argv[2:])
 
 block scripts
   script(src='/javascripts/jquery.js')

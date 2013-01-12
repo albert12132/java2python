@@ -27,13 +27,9 @@
 
 var interface = require('./interface')
   , Tokens = interface.Tokens
-  , isNumber = interface.isNumber
-  , validate = interface.validate
-  , logError = interface.logError;
 var TAB = '    ';
 var CONTROLS = [];
 var OPERATORS = ['+', '-', '*', '/', '('];
-var FATAL, privMod = false;
 
 /*---------*
  * EXPORTS *
@@ -47,9 +43,7 @@ var FATAL, privMod = false;
  *
  * @return {string} Python code
  */
-function translate(classes, fatal, private) {
-  FATAL = fatal;
-  privMod = private;
+function translate(classes) {
   var pycode = '';
   classes.forEach(function(cls) {
     pycode += translateClass(cls);
@@ -101,7 +95,7 @@ function translateClassVariables(cls) {
   code = [];
   classVars.forEach(function(variable) {
     if (variable.value == null) return;
-    var line = !variable.mods.public && privMod ? '_' : '';
+    var line = ''; // private modifier here
     line += variable.name + ' = ' + writeExpr(variable.value, [], cls);
     code.push(line);
   });
@@ -132,8 +126,9 @@ function translateConstructors(cls) {
   var instanceVars = [];
   cls.getAll('variable', {static: false}).forEach(function(variable) {
     if (variable.value == null) return;
-    var line = !variable.mods.public && privMod ? 'self._' : 'self.';
-    line += variable.name  + ' = ' + writeExpr(variable.value, [], cls);
+    var line = 'self.'; // private modifier here
+    line += variable.name  + ' = '
+        + writeExpr(variable.value, [], cls);
     instanceVars.push(line);
   });
   var body = instanceVars.join('\n') + '\n';
@@ -211,7 +206,11 @@ function translateMain(classes) {
  * @return {string} a function signature in Python
  */
 function writeSignature(name, methods) {
-  var signature = 'def ' + name + '(self';
+  var signature = '';
+  if (name == 'main') signature += '@classmethod\n';
+  else if (name == 'equals') name = '__eq__';
+
+  signature += 'def ' + name + '(self';
   if (methods.length == 1) {
     methods[0].args.forEach(function(arg) {
       signature += ', ' + arg;
@@ -219,7 +218,6 @@ function writeSignature(name, methods) {
   } else if (methods.length > 1) {
     signature += ', *args';
   }
-  if (name == 'main') signature = '@classmethod\n' + signature;
   return signature + '):';
 }
 
@@ -234,7 +232,7 @@ function writeSignature(name, methods) {
  * @return {string} of code
  */
 function writeOverloadBody(methods, cls) {
-  var first = true, body = [];
+  var body = [];
   methods.forEach(function(method) {
     var clause = 'len(args) == ' + method.args.length + ':\n';
     if (method.args.length > 0) {
@@ -283,8 +281,8 @@ function writeBody(stmts, params, cls) {
     if (first == 'new') {
       first = line.shift('<constructor>');
       cons = true;
-    } else if (validate(line.get(0), true, false)) {
-      validate(first);
+    } else if (line.validate(line.current())) {
+      line.validate(first);
       first = line.shift('<identifier>');
       locals.push(first);
       declare = true;
@@ -294,24 +292,26 @@ function writeBody(stmts, params, cls) {
 
     var special = writeSpecial(first);
     if (special) return special;
-    if (!line.empty() && line.get(0, '=') == '=') {
+    if (!line.empty() && line.current('=') == '=') {
       line.shift('=');
       var value = writeExpr(line, locals, cls);
       if (value && value != '') return first + ' = ' + value;
-      else logError('writeBody'); // TODO
+      else line.logError('writeBody'); // TODO
     } else if (!line.empty() && declare) {
-      logError('writeBody2');
+      line.logError('writeBody2');
+    } else if (line.empty() && first[first.length - 1] != ')') {
+      line.logError('not a valid statement');
     } else if (!line.empty()) {
-      logError('writeBody3');
-    } else {
-      return first;
+      line.logError('writeBody3');
     }
+    if (line.errors.length > 0) throw line.publishErrors();
+    return first;
   });
   return body.join('\n');
 }
 
 function writeIdentifier(first, line, locals, cls) {
-  validate(first);
+  line.validate(first);
   if (first == 'this') first = 'self';
   else if (locals.indexOf(first) == -1) {
     var attr = cls.get('v', first) || cls.get('m', first);
@@ -329,17 +329,18 @@ function writeIdentifier(first, line, locals, cls) {
         identifier = [convertSpecial(first, identifier, line)];
       else identifier.push(first);
       first = line.shift();
-      validate(first);
+      line.validate(first);
     } else if (next == '(') {
       if (SPECIAL.indexOf(first) != -1) {
         identifier = [convertSpecial(first, identifier, line, locals, cls)];
         first = null;
       } else {
         var args = []; line.unshift('(');
-        while (line.get(0, ')') != ')') {
+        while (line.current(')') != ')') {
           var token = line.shift(',');
-          if (token != '(' && token != ',') logError('writeIdentifier'); // TODO
-          if (line.get(0) == ')') break;
+          if (token != '(' && token != ',')
+            line.logError('writeIdentifier'); // TODO
+          if (line.current() == ')') break;
           args.push(writeExpr(line, locals, cls));
         }
         line.shift();
@@ -375,7 +376,7 @@ function writeIdentifier(first, line, locals, cls) {
  */
 function writeExpr(line, locals, cls) {
   var token = line.shift(), expr;
-  if (isNumber(token)) {
+  if (Tokens.isNumber(token)) {
     expr = token;
   } else if (token == '"') {
     var str = [];
@@ -394,7 +395,7 @@ function writeExpr(line, locals, cls) {
   } else {
     expr = writeIdentifier(token, line, locals, cls);
   }
-  if (!line.empty() && OPERATORS.indexOf(line.get(0)) != -1) {
+  if (!line.empty() && OPERATORS.indexOf(line.current()) != -1) {
     var op = line.shift();
     expr += ' ' + op + ' ' + writeExpr(line);
   }
@@ -413,9 +414,9 @@ function convertSpecial(token, identifier, line, locals, cls) {
   switch(token) {
     case 'length':
       var revised = 'len(' + identifier.join('.') + ')';
-      if (!line.empty() && line.get(0) == '(') {
+      if (!line.empty() && line.current() == '(') {
         line.shift();
-        if (line.shift(')') != ')') logError('expected ")"');
+        if (line.shift(')') != ')') line.logError('expected ")"');
       }
       return revised;
     case 'equals':
@@ -463,8 +464,8 @@ function run() {
   rl.prompt();
 
   rl.on('line', function(code) {
-    var classes = parse(code, true);
-    console.log(translate(classes, true));
+    var classes = parse(code);
+    console.log(translate(classes));
     rl.prompt();
   });
 }

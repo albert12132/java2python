@@ -16,10 +16,8 @@ engine.
 
 Issues and improvements
 -----------------------
-* Declaring arrays
 * Code cleanup
-* String and character parsing
-    * String method parsing
+* String method parsing
 * Protection modifiers
     * implement for methods
 * Control structures

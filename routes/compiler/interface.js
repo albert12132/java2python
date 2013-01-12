@@ -35,75 +35,6 @@ var DATATYPES = [
  * SUBROUTINES *
  *-------------*/
 
-/**
- * Validates an identifier. A valid Java identifer must:
- *  - start with [a-zA-Z_]
- *  - thereafter consist of [a-zA-Z_0-9]
- *  - not be a keyword (see interface.js)
- *
- * @param name {string}
- * @param identifier {bool} true if validating an identifier
- *
- * @return {bool} true if {name} if valid
- *
- * @throws ParseException
- */
-function validate(name, identifier, fatal) {
-  var msg;
-  if (typeof name == 'undefined')
-    msg = 'Expected name';
-  else if (KEYWORDS.indexOf(name) != -1)
-    msg = name + ' is a keyword';
-  else if (identifier && DATATYPES.indexOf(name) != -1)
-    msg = name + ' is a keyword (datatype)';
-  else if (name.search(/^[a-zA-Z_]\w*$/) == -1)
-    msg = name + ' is an invalid name';
-  if (fatal && msg) logError(msg);
-  return msg ? false : true;
-}
-
-/**
- * @returns {bool} true if the token is a valid integer or decimal
- */
-function isNumber(token) {
-  return token.search(/\d+/) == 0 || token.search(/\d*\.\d+/) == 0;
-}
-
-
-/*------------*
- * Exceptions *
- *------------*/
-
-/**
- * Logs an error.
- *
- * @param fatal {bool} if true, throw an exception. Otherwise just log
- *              to terminal
- * @param msg {string} error message
- */
-function logError(fatal, msg) {
-  if (fatal) throw msg;
-  else console.log('WARNING: ' + msg);
-}
-
-/**
- * Logs a Parsing error.
- *
- * @param fatal {bool} if true, throw an exception. Otherwise, just log
- *              to terminal
- * @param actual {string} actual token encountered
- * @param expected {string} expected token
- * @param msg {string} error message
- */
-function logParseError(fatal, actual, expected, msg) {
-  var message = '';
-  if (actual) message += 'Unexpected "' + actual + '". ';
-  if (expected) message += 'Expected "' + expected + '". ';
-  if (msg) message += msg;
-  logError(fatal, message);
-}
-
-
 /*--------------*
  * TOKEN BUFFER *
  *--------------*/
@@ -116,9 +47,13 @@ function logParseError(fatal, actual, expected, msg) {
  *
  * @param code {string} or {Array}
  */
-function Tokens(code) {
-  if (typeof code == 'string') this.tokens = Tokens.tokenize(code);
-  else if (Array.isArray(code)) this.tokens = code;
+function Tokens(code, lineNum) {
+  if (typeof code == 'string') this.lines = Tokens.tokenize(code);
+  else if (Array.isArray(code))
+    this.lines = Tokens.tokenize(code.join(' '));
+  this.lineNum = lineNum || 1;
+  this.curLine = [];
+  this.errors = [];
 }
 
 
@@ -144,8 +79,7 @@ Tokens.prototype.join = function(delim) {
  * @returns {Array} of strings, referred to as 'tokens'
  */
 Tokens.tokenize = function(code) {
-  code = code.replace(/\/\/.*\n/g, '');
-  code = code.replace(/\n/g, ' ');
+  code = code.replace(/\/\/.*\n/g, '\n');
   code = code.replace(/\+\+/g, ' ++ ').replace(/--/g, ' -- ');
   code = code.replace(/([^+])\+([^+])/g, function(match, p1, p2) {
     return p1 + ' + ' + p2;
@@ -160,7 +94,9 @@ Tokens.tokenize = function(code) {
     var regex = new RegExp('\\' + delim, 'g');
     code = code.replace(regex, ' ' + delim + ' ');
   });
-  return code.split(' ').filter(function(x) { return x != ''; });
+  return code.split('\n').map(function(line) {
+    return line.split(' ').filter(function(x) {return x != '';});
+  });
 };
 
 
@@ -168,7 +104,8 @@ Tokens.tokenize = function(code) {
  * @returns {bool} true if buffer is empty
  */
 Tokens.prototype.empty = function() {
-  return this.tokens.length == 0;
+  return this.lines.length == 0
+    || this.lines.length == 1 && this.lines[0].length == 0;
 };
 
 /**
@@ -181,10 +118,14 @@ Tokens.prototype.empty = function() {
  *
  * @returns {string}, the token
  */
-Tokens.prototype.get = function(index, expect) {
-  if (typeof this.tokens[index] == 'undefined')
-    logParseError(true, 'EOF', expect);
-  return this.tokens[index];
+Tokens.prototype.current = function(expect) {
+  var i = 0;
+  while (this.lines[i].length == 0 && this.lines.length > i + 1) {
+    i++;
+  }
+  if (this.lines[i].length != 0)
+    return this.lines[i][0];
+  else return '';
 };
 
 /**
@@ -198,17 +139,78 @@ Tokens.prototype.get = function(index, expect) {
  * @throws ParseException
  */
 Tokens.prototype.shift = function(expect) {
-  if (this.tokens.length == 0)
-    logParseError(true, 'EOF', expect);
-  return this.tokens.shift();
+  while (this.lines.length != 0 && this.lines[0].length == 0) {
+    this.lines.shift();
+    this.lineNum++;
+    this.curLine = [];
+  } 
+  if (this.lines.length == 0) {
+    this.logError('Unexpected EOF. Expected "' + expect + '".');
+    this.publishErrors();
+  }
+  var token = this.lines[0].shift();
+  this.curLine.push(token);
+  return token;
 };
 
 /**
  * @param item will be added to front of the buffer.
  */
 Tokens.prototype.unshift = function(item) {
-  return this.tokens.unshift(item);
+  if (this.lines.length == 0) {
+    this.lines.unshift([item]);
+  }
+  else this.lines[0].unshift(item);
 };
+
+Tokens.prototype.logError = function(msg) {
+  var line = this.curLine.join(' ');
+  if (this.lines[0]) line += ' ' + this.lines[0].join(' ');
+  var error = {
+    row: this.lineNum,
+    line: line,
+    msg: msg,
+  };
+  this.errors.push(error);
+};
+
+Tokens.prototype.publishErrors = function() {
+  var msg = this.errors.map(function(error) {
+    return 'WARNING: line ' + error.row + ':\n'
+        + error.line + '\n\t' + error.msg;
+  }).join('\n');
+  throw msg;
+}
+
+
+/**
+ * Validates an identifier. A valid Java identifer must:
+ *  - start with [a-zA-Z_]
+ *  - thereafter consist of [a-zA-Z_0-9]
+ *  - not be a keyword (see interface.js)
+ *
+ * @param name {string}
+ * @param identifier {bool} true if validating an identifier
+ *
+ * @return {bool} true if {name} if valid
+ *
+ * @throws ParseException
+ */
+Tokens.prototype.validate = function(name) {
+  var valid = typeof name == 'string'
+              && KEYWORDS.indexOf(name) == -1
+              && name.search(/^[a-zA-Z_]\w*$/) == 0;
+  if (!valid) this.logError(name + ' is an invalid identifier');
+  return valid;
+}
+
+/**
+ * @returns {bool} true if the token is a valid integer or decimal
+ */
+Tokens.isNumber = function(token) {
+  return token.search(/\d+/) == 0 || token.search(/\d*\.\d+/) == 0;
+}
+
 
 
 /*---------------------*
@@ -323,7 +325,7 @@ Class.prototype.getAll = function(type, mods) {
  *    - Method (for methods and constructors)
  *
  * @param item
- * 
+ *
  * @returns nothing
  */
 Class.prototype.add = function(item) {
@@ -336,7 +338,7 @@ Class.prototype.add = function(item) {
     case 'Method':
       var type = item.name == '__init__' ? 'constructors' : 'methods';
       if (type == 'methods') {
-        var context = this.methods[item.name] 
+        var context = this.methods[item.name]
             = this.methods[item.name] || [];
       } else var context = this.constructors;
 
@@ -393,10 +395,6 @@ function Method(mods, name, args, body) {
 exports.DELIMS = DELIMS;
 exports.KEYWORDS = KEYWORDS;
 exports.DATATYPES = DATATYPES;
-exports.validate = validate;
-exports.isNumber = isNumber;
-exports.logError = logError;
-exports.logParseError = logParseError;
 exports.Tokens = Tokens;
 exports.Class = Class;
 exports.Method = Method;

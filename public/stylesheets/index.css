@@ -31,7 +31,8 @@
 }
 
 #javacode .title-name, #javacode .title-button {
-    width:33%;
+    /*width:33%;*/
+    width:49%;
 }
 
 #pythoncode .title-name, #pythoncode .title-button {
@@ -47,7 +48,7 @@
     -webkit-transition: background-color .2s linear;
 }
 #compile {
-    border-style:none solid;
+    /*border-style:none solid;*/
 }
 .title-button:hover {
     background-color:#888;

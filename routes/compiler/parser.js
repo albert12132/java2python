@@ -13,16 +13,10 @@
  *-------------------------------------------------------------------*/
 
 var interface = require('./interface')
-  , KEYWORDS = interface.KEYWORDS
-  , DATATYPES = interface.DATATYPES
-  , validate = interface.validate
   , Tokens = interface.Tokens
   , Class = interface.Class
   , Variable = interface.Variable
-  , Method = interface.Method
-  , logError = interface.logError
-  , logParseError = interface.logParseError;
-var FATAL;
+  , Method = interface.Method;
 
 /*---------*
  * EXPORTS *
@@ -36,18 +30,18 @@ var FATAL;
  *
  * @returns {Array} of Class objects
  */
-function parse(code, fatal) {
-  FATAL = fatal;
+function parse(code) {
   if (!code) return [];
   var buffer = new Tokens(code), classes = [];
   while (!buffer.empty()) {
     var cls = readClass(buffer);
     classes.forEach(function(x) {
       if (x.name == cls.name)
-        logError(true, 'Class ' + cls.name + ' already exists');
+        buffer.logError('Class ' + cls.name + ' already exists');
     });
     classes.push(cls);
   }
+  if (buffer.errors.length != 0) throw buffer.publishErrors();
   return classes;
 }
 
@@ -73,27 +67,25 @@ exports.parse = parse;
 function readClass(buffer, modifiers) {
   // modifier checks
   var mods = modifiers || parseModifiers(buffer);
-  if (!mods.public)
-    logParseError(FATAL, 'private', null, "Classes can't be private");
-  else if (mods.static)
-    logParseError(FATAL, 'static', null, "Classes can't be static");
 
   var token = buffer.shift('class');
-  if (token != 'class') logParseError(true, token, 'class');
+  if (token != 'class')
+    buffer.logError('Unexpected ' + token + ', expected "class"');
 
   var cls = new Class(buffer.shift('<identifier>'));
-  validate(cls.name, true);
+  buffer.validate(cls.name);
   token = buffer.shift('{');
 
   if (token == 'extends') {
     cls.super = buffer.shift('<superclass>');
-    validate(cls.super, true);
+    buffer.validate(cls.super);
     token = buffer.shift('{');
   }
 
   // parse class body
-  if (token != '{') logParseError(true, token, '{');
-  while (buffer.get(0, '}') != '}') readDeclare(buffer, cls);
+  if (token != '{')
+    buffer.logError('Unexpected ' + token + ', expected "{"');
+  while (buffer.current('}') != '}') readDeclare(buffer, cls);
   buffer.shift('}');
   return cls;
 }
@@ -120,27 +112,27 @@ function readClass(buffer, modifiers) {
 function readDeclare(buffer, cls) {
   var mods = parseModifiers(buffer);
 
-  if (buffer.get(0) == 'class')
+  if (buffer.current() == 'class')
     return cls.add(readClass(buffer, mods));
 
   var datatype = buffer.shift();
-  validate(datatype);
+  buffer.validate(datatype);
 
   var isArray = parseArray(buffer, '(');
-  if (buffer.get(0, '(') == '(') { // expect it to be a constructor
-    if (datatype != cls.name) logParseError(true, '(');
-    else if (isArray) logParseError(FATAL, '[');
+  if (buffer.current() == '(') { // expect it to be a constructor
+    if (datatype != cls.name) buffer.logError('Unexpected "("');
+    else if (isArray) buffer.logError('Unexpected "["');
     else var name = '__init__';
   } else var name = buffer.shift('<identifier>');
 
-  if (buffer.get(0) == '(') {
-    validate(name, true);
+  if (buffer.current() == '(') {
+    buffer.validate(name);
     return cls.add(new Method(mods, name,
           parseArgs(buffer), parseBody(buffer)));
   }
 
   do {
-    validate(name, true);
+    buffer.validate(name);
     var thisArray = parseArray(buffer) || isArray;
 
     var token = buffer.shift();
@@ -150,7 +142,8 @@ function readDeclare(buffer, cls) {
     cls.add(new Variable(mods, name, value));
     if (token == ',') name = buffer.shift('<identifier>');
   } while (token == ',');
-  if (token != ';') logParseError(true, token, ';');
+  if (token != ';')
+    buffer.logError('Unexpected ' + token + ', expected ";"');
 }
 
 /**
@@ -165,11 +158,11 @@ function readDeclare(buffer, cls) {
  */
 function parseModifiers(buffer) {
   var mods = {public: true, static: false};
-  var token = buffer.get(0);
+  var token = buffer.current();
   if ('public protected private'.indexOf(token) != -1) {
     mods.public = token != 'private';
     buffer.shift();
-    token = buffer.get(0);
+    token = buffer.current();
   }
   if (token == 'static') {
     mods.static = true;
@@ -196,21 +189,23 @@ function parseModifiers(buffer) {
  */
 function parseArgs(buffer) {
   var token = buffer.shift('(');
-  if (token != '(') logParseError(true, token, '(');
+  if (token != '(')
+    buffer.logError('Unexpected ' + token + ', expected "("');
 
-  if (buffer.get(0, ')') == ')') { buffer.shift(); return []; }
+  if (buffer.current(')') == ')') { buffer.shift(); return []; }
 
   var args = [];
   while (token != ')') {
-    if (token != '(' && token != ',') logParseError(true, token);
+    if (token != '(' && token != ',')
+      buffer.logError('Unexpected ' + token);
     var datatype = buffer.shift('<datatype>');
-    validate(datatype);
+    buffer.validate(datatype);
     parseArray(buffer, '<identifier>');
     var name = buffer.shift('<identifier>');
 
     if (args.indexOf(name) != -1)
-      logParseError(true, name, null, 'Already defined');
-    validate(name, true);
+      buffer.logError(name + ' is already a parameter');
+    buffer.validate(name);
     parseArray(buffer, ')');
 
     token = buffer.shift();
@@ -232,10 +227,11 @@ function parseArgs(buffer) {
  */
 function parseBody(buffer) {
   var token = buffer.shift('{');
-  if (token != '{') logParseError(true, token, '{');
+  if (token != '{')
+    buffer.logError('Unexpected ' + token + ', expected "{"');
 
   var body = [];
-  while (buffer.get(0, '}') != '}') {
+  while (buffer.current('}') != '}') {
     body.push(readStatement(buffer));
   }
 
@@ -264,12 +260,13 @@ function parseBody(buffer) {
  */
 function readStatement(buffer) {
   var stmt = [], token = buffer.shift(';');
+  var lineNum = buffer.lineNum;
   while (token != ';') {
-    if (token == '}') logParseError(true, '}');
+    if (token == '}') buffer.logError('Unexpected "}", expected ";"');
     stmt.push(token);
     token = buffer.shift();
   }
-  return new Tokens(stmt);
+  return new Tokens(stmt, lineNum);
 }
 
 
@@ -291,10 +288,11 @@ function readStatement(buffer) {
  */
 function readExpr(buffer) {
   var expr = [];
-  while (buffer.get(0, ';') != ';' && buffer.get(0) != ',') {
+  var lineNum = buffer.line;
+  while (buffer.current(';') != ';' && buffer.current() != ',') {
     expr.push(buffer.shift());
   }
-  return new Tokens(expr);
+  return new Tokens(expr, lineNum);
 }
 
 /**
@@ -312,9 +310,9 @@ function readExpr(buffer) {
  * @param expect {string}, the expected token in case of an EOF
  */
 function parseArray(buffer, expect) {
-  if (buffer.get(0, expect) != '[') return false;
+  if (buffer.current(expect) != '[') return false;
   buffer.shift();
-  if (buffer.shift(']') != ']') logParseError(null, ']');
+  if (buffer.shift(']') != ']') buffer.logError('Unexpected "]"');
   else return true;
 }
 
@@ -333,7 +331,7 @@ function run() {
   rl.prompt();
 
   rl.on('line', function(code) {
-    console.log(parse(code, true));
+    console.log(parse(code));
     rl.prompt();
   });
 }
