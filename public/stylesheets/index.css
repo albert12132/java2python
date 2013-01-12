@@ -63,17 +63,10 @@
     text-align:center;
 }
 
-textarea {
-    border:none;
-    height:90%;
-    padding:10px;
-    resize:none;
-    width:93%;
-}
-
 #options-div {
     display:none;
     text-align:left;
+    position:absolute;
 }
 
 .option-box {

@@ -16,12 +16,12 @@ engine.
 
 Issues and improvements
 -----------------------
+* Declaring arrays
 * Code cleanup
 * String and character parsing
     * String method parsing
 * Protection modifiers
     * implement for methods
-* `main` method translation into Python `main`
 * Control structures
     * `if`/`else`
     * `while`
@@ -32,4 +32,3 @@ Issues and improvements
     * Hashtables -> dictionaries
 * Web interface options:
     * optimizations (e.g. method overloading)
-* Syntax highlighting

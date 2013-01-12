@@ -54,7 +54,8 @@ function translate(classes, fatal, private) {
   classes.forEach(function(cls) {
     pycode += translateClass(cls);
   });
-  return pycode;
+  pycode += translateMain(classes);
+  return pycode.trim() + '\n';
 }
 
 exports.translate = translate;
@@ -174,6 +175,23 @@ function translateMethod(method, cls) {
   return signature + '\n' + tab(body) + '\n\n';
 }
 
+function translateMain(classes) {
+  var signature = 'if __name__ == "__main__":' + '\n';
+  signature += tab('import sys') + '\n';
+  signature += tab('assert len(sys.argv) > 1') + '\n';
+  var clauses = [];
+  classes.forEach(function(cls) {
+    if (cls.get('method', 'main')){
+      var clause = 'sys.argv[1] == "' + cls.name + '":' + '\n';
+      clause += tab(cls.name + '.main(sys.argv[2:])');
+      clauses.push(clause);
+    }
+  });
+  clauses = clauses.join('\nelif ');
+  if (clauses.trim() == '') return '';
+  return signature + tab('if ' + clauses);
+}
+
 
 /*---------*
  * WRITERS *
@@ -201,6 +219,7 @@ function writeSignature(name, methods) {
   } else if (methods.length > 1) {
     signature += ', *args';
   }
+  if (name == 'main') signature = '@classmethod\n' + signature;
   return signature + '):';
 }
 
@@ -297,7 +316,7 @@ function writeIdentifier(first, line, locals, cls) {
   else if (locals.indexOf(first) == -1) {
     var attr = cls.get('v', first) || cls.get('m', first);
     if (attr) {
-      if (attr.mods.static) first = cls.name + '.' + first;
+      if (attr.mods && attr.mods.static) first = cls.name + '.' + first;
       else first = 'self.' + first;
     }
   }
@@ -306,26 +325,35 @@ function writeIdentifier(first, line, locals, cls) {
   var next = line.shift();
   while (next == '.' || next == '(' || next == '[') {
     if (next == '.') {
-      identifier.push(first);
+      if (SPECIAL.indexOf(first) != -1)
+        identifier = [convertSpecial(first, identifier, line)];
+      else identifier.push(first);
       first = line.shift();
       validate(first);
     } else if (next == '(') {
-      var args = []; line.unshift('(');
-      while (line.get(0, ')') != ')') {
-        var token = line.shift(',');
-        if (token != '(' && token != ',') logError('writeIdentifier'); // TODO
-        if (line.get(0) == ')') break;
-        args.push(writeExpr(line, locals, cls));
+      if (SPECIAL.indexOf(first) != -1) {
+        identifier = [convertSpecial(first, identifier, line, locals, cls)];
+        first = null;
+      } else {
+        var args = []; line.unshift('(');
+        while (line.get(0, ')') != ')') {
+          var token = line.shift(',');
+          if (token != '(' && token != ',') logError('writeIdentifier'); // TODO
+          if (line.get(0) == ')') break;
+          args.push(writeExpr(line, locals, cls));
+        }
+        line.shift();
+        first += '(' + args.join(', ') + ')';
       }
-      line.shift();
-      first += '(' + args.join(', ') + ')';
     } else if (next == '[') {
-      var index = writeExpr(line);
+      var index = writeExpr(line, locals, cls);
       line.shift(']');
       first += '[' + index + ']';
     }
     if (line.empty()) {
-      identifier.push(first);
+      if(SPECIAL.indexOf(first) != -1)
+        return convertSpecial(first, identifier, line);
+      else if (first) identifier.push(first);
       return identifier.join('.');
     }
     else next = line.shift();
@@ -376,6 +404,28 @@ function writeExpr(line, locals, cls) {
 function writeSpecial(stmt) {
   if (stmt.indexOf('System.out.println') == 0) {
     return stmt.replace('System.out.println', 'print');
+  }
+}
+
+var SPECIAL = ['length', 'equals'];
+
+function convertSpecial(token, identifier, line, locals, cls) {
+  switch(token) {
+    case 'length':
+      var revised = 'len(' + identifier.join('.') + ')';
+      if (!line.empty() && line.get(0) == '(') {
+        line.shift();
+        if (line.shift(')') != ')') logError('expected ")"');
+      }
+      return revised;
+    case 'equals':
+      var revised = identifier.join('.') + ' == ';
+      var other = writeExpr(line, locals, cls);
+      revised += other;
+      line.shift(')');
+      if (!line.empty()) revised = '(' + revised + ')';
+      return revised;
+
   }
 }
 

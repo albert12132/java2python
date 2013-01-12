@@ -153,8 +153,8 @@ Tokens.tokenize = function(code) {
   code = code.replace(/([^-])-([^-])/g, function(match, p1, p2) {
     return p1 + ' - ' + p2;
   });
-  code = code.replace(/([^\d])\.([^\d])/, function(match, p1, p2) {
-    return p1 + ' . ' + p2;
+  code = code.replace(/\.([^\d])/g, function(match, p1) {
+    return ' . ' + p1;
   });
   DELIMS.forEach(function(delim) {
     var regex = new RegExp('\\' + delim, 'g');

@@ -26,7 +26,7 @@ block content
                   System.out.println("hi");
               }
           }
-        form#options-div
+        #options-div
           .option-box
             input(type='checkbox',id='private')
             | translate private modifiers as '_' variables
@@ -40,8 +40,15 @@ block content
       .code
         #pycode.editor.
           class Ex(object):
+              @classmethod
               def main(self, args):
                   print("hi")
+
+          if __name__ == "__main__":
+              import sys
+              assert len(sys.argv) > 1
+              if sys.argv[1] == "Ex":
+                  Ex.main(argv[2:])
 
 block scripts
   script(src='/javascripts/jquery.js')
