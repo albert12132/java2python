@@ -281,7 +281,16 @@ function writeBody(stmts, params, cls) {
     if (first == 'new') {
       first = line.shift('<constructor>');
       cons = true;
-    } else if (line.validate(line.current())) {
+    } else if (line.current() == '[') {
+      line.shift();
+      if (line.current() != ']') line.unshift('[');
+      else {
+        line.shift();
+        declare = true;
+        first = line.shift('<identifier>');
+        locals.push(first);
+      }
+    } else if (line.validate(line.current(), true)) {
       line.validate(first);
       first = line.shift('<identifier>');
       locals.push(first);
@@ -289,6 +298,10 @@ function writeBody(stmts, params, cls) {
     }
     if (!declare)
       first = writeIdentifier(first, line, locals, cls);
+    else if (!line.empty() && line.current() == '[') {
+      line.shift();
+      if (line.shift(']') != ']') line.logError('Expectd "]"');
+    }
 
     var special = writeSpecial(first);
     if (special) return special;
@@ -296,13 +309,13 @@ function writeBody(stmts, params, cls) {
       line.shift('=');
       var value = writeExpr(line, locals, cls);
       if (value && value != '') return first + ' = ' + value;
-      else line.logError('writeBody'); // TODO
+      else line.logError('Invalid expression'); // TODO
     } else if (!line.empty() && declare) {
-      line.logError('writeBody2');
+      line.logError('Not a valid statement');
     } else if (line.empty() && first[first.length - 1] != ')') {
       line.logError('not a valid statement');
     } else if (!line.empty()) {
-      line.logError('writeBody3');
+      line.logError('not a valid statement');
     }
     if (line.errors.length > 0) throw line.publishErrors();
     return first;
@@ -392,6 +405,35 @@ function writeExpr(line, locals, cls) {
     expr = 'False';
   } else if (token == 'new') {
     expr = writeIdentifier(line.shift(), line, locals, cls);
+    expr = expr.replace(/^(\w+)\[(.+)\]/, function(m, p1, p2) {
+      var elem = 'None';
+      switch(p1) {
+        case 'int':
+        case 'double':
+        case 'short':
+        case 'long':
+        case 'float':
+          elem = '0';
+          break;
+        case 'boolean':
+          elem = 'False';
+          break;
+      }
+      var array = [];
+      for (var i = 0; i < p2; i++) {
+        array.push(elem);
+      }
+      return '[' + array.join(', ') + ']';
+    });
+  } else if (token == '{') {
+    var array = [], token = '';
+    while (token != '}') {
+      array.push(writeExpr(line, locals, cls));
+      if (line.current(',') != ',') break;
+      else line.shift();
+    }
+    if (line.shift('}') != '}') line.logError('Expected "}"');
+    else expr = '[' + array.join(', ') + ']';
   } else {
     expr = writeIdentifier(token, line, locals, cls);
   }

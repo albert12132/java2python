@@ -135,8 +135,8 @@ function readDeclare(buffer, cls) {
     buffer.validate(name);
     var thisArray = parseArray(buffer) || isArray;
 
-    var token = buffer.shift();
-    var value = token == '=' ? readExpr(buffer) : null;
+    var token = buffer.shift(), lineNum = buffer.lineNum;
+    var value = token == '=' ? new Tokens(readExpr(buffer, lineNum)) : null;
     if (token == '=') token = buffer.shift(';');
 
     cls.add(new Variable(mods, name, value));
@@ -261,11 +261,17 @@ function parseBody(buffer) {
 function readStatement(buffer) {
   var stmt = [], token = buffer.shift(';');
   var lineNum = buffer.lineNum;
-  while (token != ';') {
-    if (token == '}') buffer.logError('Unexpected "}", expected ";"');
+  while (token != ';' && token != '=') {
     stmt.push(token);
-    token = buffer.shift();
+    token = buffer.shift(';');
   }
+  if (token == '=') {
+    stmt.push(token);
+    stmt = stmt.concat(readExpr(buffer));
+    token = buffer.shift(';');
+  }
+  if (token != ';')
+    buffer.logError('Unexpected ' + token + ', expeccted ";"');
   return new Tokens(stmt, lineNum);
 }
 
@@ -287,12 +293,27 @@ function readStatement(buffer) {
  * @return {Array} of strings (tokens)
  */
 function readExpr(buffer) {
-  var expr = [];
-  var lineNum = buffer.line;
-  while (buffer.current(';') != ';' && buffer.current() != ',') {
-    expr.push(buffer.shift());
+  var expr = [], stack = [];
+  var opens = ['{', '"', '(', '['];
+  var closes = ['}', '"', ')', ']'];
+  var map = {'{': '}', '"': '"', '(': ')', '[': ']'};
+  while (buffer.current(';') != ';') {
+    var token = buffer.shift();
+    if (stack.length == 0 && token == ',') {
+      buffer.unshift(',');
+      break;
+    }
+    if (stack[stack.length-1] != '"' && opens.indexOf(token) != -1)
+      stack.push(token);
+    else if (closes.indexOf(token) != -1
+        && map[stack[stack.length-1]] == token) stack.pop();
+    else if (closes.indexOf(token) != -1)
+      buffer.logError('Unexpected ' + token + ', expected ' + stack[stack.length-1]);
+    expr.push(token);
   }
-  return new Tokens(expr, lineNum);
+  if (stack.length != 0)
+    buffer.logerror('unexpected ";", expected ' + stack[stack.length-1]);
+  return expr;
 }
 
 /**
@@ -311,9 +332,11 @@ function readExpr(buffer) {
  */
 function parseArray(buffer, expect) {
   if (buffer.current(expect) != '[') return false;
-  buffer.shift();
-  if (buffer.shift(']') != ']') buffer.logError('Unexpected "]"');
-  else return true;
+  while (buffer.current() == '[') {
+    buffer.shift();
+    if (buffer.shift() != ']') buffer.logError('Expected "]"');
+  }
+  return true;
 }
 
 

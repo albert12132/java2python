@@ -196,11 +196,12 @@ Tokens.prototype.publishErrors = function() {
  *
  * @throws ParseException
  */
-Tokens.prototype.validate = function(name) {
+Tokens.prototype.validate = function(name, noLog) {
   var valid = typeof name == 'string'
               && KEYWORDS.indexOf(name) == -1
               && name.search(/^[a-zA-Z_]\w*$/) == 0;
-  if (!valid) this.logError(name + ' is an invalid identifier');
+  if (!valid && !noLog)
+    this.logError(name + ' is an invalid identifier');
   return valid;
 }
 
