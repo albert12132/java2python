@@ -29,7 +29,7 @@ var interface = require('./interface')
   , Tokens = interface.Tokens
 var TAB = '    ';
 var CONTROLS = [];
-var OPERATORS = ['+', '-', '*', '/', '('];
+var OPERATORS = ['+', '-', '*', '/', '(', '==', '&&', '||', '&', '|'];
 
 /*---------*
  * EXPORTS *
@@ -267,114 +267,62 @@ function writeOverloadBody(methods, cls) {
  */
 function writeBody(stmts, params, cls) {
   var locals = params;
-  body = stmts.map(function(line) {
-    var first = line.shift();
-    if (first == 'return') {
-      if (line.empty()) return 'return'
-      else return 'return ' + writeExpr(line, locals, cls);
-    } else if (CONTROLS.indexOf(first) != -1) {
-      // TODO
-      return;
+  body = stmts.map(function(stmt) {
+    switch(stmt.type) {
+      case 'return':
+        if (stmt.expr == 'None') return 'return';
+        else return 'return ' + writeExpr(stmt.expr, locals, cls);
+      case 'call':
+        var identifier = writeIdentifier(stmt.line, locals, cls);
+        return identifier;
+      case 'assign':
+        var assigns = [];
+        for (var i = 0; i < stmt.names.length; i++) {
+          var identifier = stmt.names[i];
+          var value = writeExpr(stmt.exprs[i], locals, cls);
+          assigns.push(identifier + ' = ' + value);
+        }
+        return assigns.join('\n');
     }
-
-    var declare = false;
-    if (first == 'new') {
-      first = line.shift('<constructor>');
-      cons = true;
-    } else if (line.current() == '[') {
-      line.shift();
-      if (line.current() != ']') line.unshift('[');
-      else {
-        line.shift();
-        declare = true;
-        first = line.shift('<identifier>');
-        locals.push(first);
-      }
-    } else if (line.validate(line.current(), true)) {
-      line.validate(first);
-      first = line.shift('<identifier>');
-      locals.push(first);
-      declare = true;
-    }
-    if (!declare)
-      first = writeIdentifier(first, line, locals, cls);
-    else if (!line.empty() && line.current() == '[') {
-      line.shift();
-      if (line.shift(']') != ']') line.logError('Expectd "]"');
-    }
-
-    var special = writeSpecial(first);
-    if (special) return special;
-    if (!line.empty() && line.current('=') == '=') {
-      line.shift('=');
-      var value = writeExpr(line, locals, cls);
-      if (value && value != '') return first + ' = ' + value;
-      else line.logError('Invalid expression'); // TODO
-    } else if (!line.empty() && declare) {
-      line.logError('Not a valid statement');
-    } else if (line.empty() && first[first.length - 1] != ')') {
-      line.logError('not a valid statement');
-    } else if (!line.empty()) {
-      line.logError('not a valid statement');
-    }
-    if (line.errors.length > 0) throw line.publishErrors();
-    return first;
   });
   return body.join('\n');
 }
 
-function writeIdentifier(first, line, locals, cls) {
-  line.validate(first);
-  if (first == 'this') first = 'self';
-  else if (locals.indexOf(first) == -1) {
+function writeIdentifier(line, locals, cls) {
+  var identifier = "";
+  var first = line[0];
+  if (locals.indexOf(first) == -1) {
     var attr = cls.get('v', first) || cls.get('m', first);
     if (attr) {
-      if (attr.mods && attr.mods.static) first = cls.name + '.' + first;
-      else first = 'self.' + first;
+      if (attr.mods && attr.mods.static)
+        identifier += cls.name + '.';
+      else identifier += 'self.';
     }
   }
-  if (line.empty()) return first;
-  var identifier = [];
-  var next = line.shift();
-  while (next == '.' || next == '(' || next == '[') {
-    if (next == '.') {
-      if (SPECIAL.indexOf(first) != -1)
-        identifier = [convertSpecial(first, identifier, line)];
-      else identifier.push(first);
-      first = line.shift();
-      line.validate(first);
-    } else if (next == '(') {
-      if (SPECIAL.indexOf(first) != -1) {
-        identifier = [convertSpecial(first, identifier, line, locals, cls)];
-        first = null;
-      } else {
-        var args = []; line.unshift('(');
-        while (line.current(')') != ')') {
-          var token = line.shift(',');
-          if (token != '(' && token != ',')
-            line.logError('writeIdentifier'); // TODO
-          if (line.current() == ')') break;
-          args.push(writeExpr(line, locals, cls));
-        }
-        line.shift();
-        first += '(' + args.join(', ') + ')';
-      }
-    } else if (next == '[') {
-      var index = writeExpr(line, locals, cls);
-      line.shift(']');
-      first += '[' + index + ']';
-    }
-    if (line.empty()) {
-      if(SPECIAL.indexOf(first) != -1)
-        return convertSpecial(first, identifier, line);
-      else if (first) identifier.push(first);
-      return identifier.join('.');
-    }
-    else next = line.shift();
+  while (line.length > 0) {
+    var token = line.shift();
+    if (Array.isArray(token)) {
+      identifier += writeExpr(token, locals, cls);
+    } else if (token == ',') {
+      identifier += ', ';
+    } else if (token == 'this') {
+      identifier += 'self';
+    } else if(token == 'length' 
+      && identifier.charAt(identifier.length-1) == '.') {
+      identifier = 'len(' 
+        + identifier.substring(0, identifier.length-1) + ')';
+    } else if (token == 'equals'
+      && identifier.charAt(identifier.length-1) == '.') {
+      identifier = identifier.substring(0, identifier.length-1) + 
+        ' == ' + line.shift();
+      identifier += writeExpr(line.shift(), locals, cls);
+      identifier += line.shift();
+    } else {
+      identifier += token;
+    } // SPECIALs, like length and equals
   }
-  identifier.push(first);
-  line.unshift(next);
-  return identifier.join('.');
+  identifier = identifier.replace('System.out.println', 'print');
+  return identifier;
 }
 
 
@@ -388,58 +336,28 @@ function writeIdentifier(first, line, locals, cls) {
  * @return {string} of code
  */
 function writeExpr(line, locals, cls) {
-  var token = line.shift(), expr;
-  if (Tokens.isNumber(token)) {
-    expr = token;
-  } else if (token == '"') {
-    var str = [];
-    token = line.shift();
-    while (token != '"') {
-      str.push(token);
-      token = line.shift();
-    }
-    expr = '"' + str.join(' ') + '"';
+  var token = line[0], expr;
+  if (Array.isArray(token) && token[0] == 'array') {
+    expr = '[' + token[1].map(function(elem) {
+      return writeExpr(elem, locals, cls);
+    }).join(', ') + ']';
+  } else if (Array.isArray(token)) {
+    expr = writeIdentifier(token, locals, cls);
   } else if (token == 'true') {
     expr = 'True';
   } else if (token == 'false') {
     expr = 'False';
-  } else if (token == 'new') {
-    expr = writeIdentifier(line.shift(), line, locals, cls);
-    expr = expr.replace(/^(\w+)\[(.+)\]/, function(m, p1, p2) {
-      var elem = 'None';
-      switch(p1) {
-        case 'int':
-        case 'double':
-        case 'short':
-        case 'long':
-        case 'float':
-          elem = '0';
-          break;
-        case 'boolean':
-          elem = 'False';
-          break;
-      }
-      var array = [];
-      for (var i = 0; i < p2; i++) {
-        array.push(elem);
-      }
-      return '[' + array.join(', ') + ']';
-    });
-  } else if (token == '{') {
-    var array = [], token = '';
-    while (token != '}') {
-      array.push(writeExpr(line, locals, cls));
-      if (line.current(',') != ',') break;
-      else line.shift();
-    }
-    if (line.shift('}') != '}') line.logError('Expected "}"');
-    else expr = '[' + array.join(', ') + ']';
+  } else if (token == 'null') {
+    expr = 'None';
   } else {
-    expr = writeIdentifier(token, line, locals, cls);
+    expr = token;
   }
-  if (!line.empty() && OPERATORS.indexOf(line.current()) != -1) {
-    var op = line.shift();
-    expr += ' ' + op + ' ' + writeExpr(line);
+  if (OPERATORS.indexOf(line[1]) != -1) {
+    var op = line[1];
+    if (op == '==') op = 'is';
+    else if (op == '&&') op = 'and';
+    else if (op == '||') op = 'or';
+    expr += ' ' + op + ' ' + writeExpr(line[2], locals, cls);
   }
   return expr;
 }

@@ -13,8 +13,7 @@
  *      - Variable
  *-------------------------------------------------------------------*/
 
-var DELIMS = ['{', '}', '(', ')', '[', ']', ';', ',', '=', 
-    '"', '*', '/'];
+var DELIMS = ['{', '}', '(', ')', '[', ']', ';', ',', '"', '*', '/'];
 var KEYWORDS = [
   'public', 'private', 'protected',
   'static', // 'abstract', 'final',
@@ -81,11 +80,19 @@ Tokens.prototype.join = function(delim) {
 Tokens.tokenize = function(code) {
   code = code.replace(/\/\/.*\n/g, '\n');
   code = code.replace(/\+\+/g, ' ++ ').replace(/--/g, ' -- ');
+  code = code.replace(/==/g, ' == ');
+  code = code.replace(/&&/g, ' && ').replace(/\|\|/g, ' || ');
   code = code.replace(/([^+])\+([^+])/g, function(match, p1, p2) {
     return p1 + ' + ' + p2;
   });
   code = code.replace(/([^-])-([^-])/g, function(match, p1, p2) {
     return p1 + ' - ' + p2;
+  });
+  code = code.replace(/([^=])=([^=])/g, function(match, p1, p2) {
+    return p1 + ' = ' + p2;
+  });
+  code = code.replace(/([^&])&([^&])/g, function(match, p1, p2) {
+    return p1 + ' & ' + p2;
   });
   code = code.replace(/\.([^\d])/g, function(match, p1) {
     return ' . ' + p1;
@@ -138,7 +145,7 @@ Tokens.prototype.current = function(expect) {
  *
  * @throws ParseException
  */
-Tokens.prototype.shift = function(expect) {
+Tokens.prototype.shift = function(expect, log) {
   while (this.lines.length != 0 && this.lines[0].length == 0) {
     this.lines.shift();
     this.lineNum++;
@@ -150,6 +157,8 @@ Tokens.prototype.shift = function(expect) {
   }
   var token = this.lines[0].shift();
   this.curLine.push(token);
+  if (log && token != expect)
+    this.logError('Unexpected ' + token + ', expected ' + expect);
   return token;
 };
 
@@ -180,6 +189,11 @@ Tokens.prototype.publishErrors = function() {
         + error.line + '\n\t' + error.msg;
   }).join('\n');
   throw msg;
+}
+
+Tokens.prototype.expect = function(expect, actual) {
+  if (expect != actual)
+    this.logError('Unexpected ' + actual + ', expected ' + expect);
 }
 
 

@@ -17,6 +17,8 @@ var interface = require('./interface')
   , Class = interface.Class
   , Variable = interface.Variable
   , Method = interface.Method;
+var OPERATORS = ['+', '*', '-', '/', '==', '&&', '||'];
+var CONTROLS = [];
 
 /*---------*
  * EXPORTS *
@@ -41,7 +43,7 @@ function parse(code) {
     });
     classes.push(cls);
   }
-  if (buffer.errors.length != 0) throw buffer.publishErrors();
+  if (buffer.errors.length != 0) buffer.publishErrors();
   return classes;
 }
 
@@ -68,9 +70,7 @@ function readClass(buffer, modifiers) {
   // modifier checks
   var mods = modifiers || parseModifiers(buffer);
 
-  var token = buffer.shift('class');
-  if (token != 'class')
-    buffer.logError('Unexpected ' + token + ', expected "class"');
+  var token = buffer.shift('class', true);
 
   var cls = new Class(buffer.shift('<identifier>'));
   buffer.validate(cls.name);
@@ -83,12 +83,12 @@ function readClass(buffer, modifiers) {
   }
 
   // parse class body
-  if (token != '{')
-    buffer.logError('Unexpected ' + token + ', expected "{"');
+  buffer.expect('{', token);
   while (buffer.current('}') != '}') readDeclare(buffer, cls);
   buffer.shift('}');
   return cls;
 }
+
 
 /**
  * Reads a single complete declaraton found in the body of a class.
@@ -106,7 +106,7 @@ function readClass(buffer, modifiers) {
  *
  * @param buffer {Tokens} of strings
  * @param cls {Class} object, which will be modified
-*
+ *
  * @returns nothing; instead, it mutates {cls}
  */
 function readDeclare(buffer, cls) {
@@ -117,11 +117,10 @@ function readDeclare(buffer, cls) {
 
   var datatype = buffer.shift();
   buffer.validate(datatype);
+  parseArray(buffer, '(');
 
-  var isArray = parseArray(buffer, '(');
   if (buffer.current() == '(') { // expect it to be a constructor
     if (datatype != cls.name) buffer.logError('Unexpected "("');
-    else if (isArray) buffer.logError('Unexpected "["');
     else var name = '__init__';
   } else var name = buffer.shift('<identifier>');
 
@@ -131,20 +130,13 @@ function readDeclare(buffer, cls) {
           parseArgs(buffer), parseBody(buffer)));
   }
 
-  do {
-    buffer.validate(name);
-    var thisArray = parseArray(buffer) || isArray;
-
-    var token = buffer.shift(), lineNum = buffer.lineNum;
-    var value = token == '=' ? new Tokens(readExpr(buffer, lineNum)) : null;
-    if (token == '=') token = buffer.shift(';');
-
-    cls.add(new Variable(mods, name, value));
-    if (token == ',') name = buffer.shift('<identifier>');
-  } while (token == ',');
-  if (token != ';')
-    buffer.logError('Unexpected ' + token + ', expected ";"');
+  buffer.unshift(name);
+  var variables = readVariables(buffer);
+  variables.forEach(function(variable) {
+    cls.add(new Variable(mods, variable.name, variable.value));
+  });
 }
+
 
 /**
  * Parses modifer tokens and removes them from the buffer. The returned
@@ -188,9 +180,7 @@ function parseModifiers(buffer) {
  * @return {Array} of parameter names (datatypes are discarded)
  */
 function parseArgs(buffer) {
-  var token = buffer.shift('(');
-  if (token != '(')
-    buffer.logError('Unexpected ' + token + ', expected "("');
+  var token = buffer.shift('(', true);
 
   if (buffer.current(')') == ')') { buffer.shift(); return []; }
 
@@ -198,18 +188,18 @@ function parseArgs(buffer) {
   while (token != ')') {
     if (token != '(' && token != ',')
       buffer.logError('Unexpected ' + token);
-    var datatype = buffer.shift('<datatype>');
-    buffer.validate(datatype);
-    parseArray(buffer, '<identifier>');
-    var name = buffer.shift('<identifier>');
 
+    buffer.validate(buffer.shift('<datatype>'));
+    parseArray(buffer, '<identifier>');
+
+    var name = buffer.shift('<identifier>');
     if (args.indexOf(name) != -1)
       buffer.logError(name + ' is already a parameter');
-    buffer.validate(name);
+    else buffer.validate(name);
     parseArray(buffer, ')');
+    args.push(name);
 
     token = buffer.shift();
-    args.push(name);
   }
   return args;
 }
@@ -226,15 +216,12 @@ function parseArgs(buffer) {
  * @return {Array}
  */
 function parseBody(buffer) {
-  var token = buffer.shift('{');
-  if (token != '{')
-    buffer.logError('Unexpected ' + token + ', expected "{"');
-
+  var token = buffer.shift('{', true);
   var body = [];
   while (buffer.current('}') != '}') {
-    body.push(readStatement(buffer));
+    var stmt = readStatement(buffer);
+    if (typeof stmt != 'undefined') body.push(stmt);
   }
-
   buffer.shift('}'); // discard '}'
   return body;
 }
@@ -259,20 +246,72 @@ function parseBody(buffer) {
  * @return {Array} of strings (tokens)
  */
 function readStatement(buffer) {
-  var stmt = [], token = buffer.shift(';');
-  var lineNum = buffer.lineNum;
-  while (token != ';' && token != '=') {
-    stmt.push(token);
-    token = buffer.shift(';');
+  var token = buffer.current(';');
+  if (token == 'return') {
+    buffer.shift('return', true);
+    var expr = readExpr(buffer);
+    buffer.shift(';', true);
+    return {type: 'return', expr: expr};
+  } else if (CONTROLS.indexOf(token) != -1) {
+    // TODO
+    return;
+  } else if (token == 'new') {
+    token = buffer.shift();
   }
-  if (token == '=') {
-    stmt.push(token);
-    stmt = stmt.concat(readExpr(buffer));
-    token = buffer.shift(';');
+  var identifier = readIdentifier(buffer);
+  token = buffer.shift(';');
+  if (token == ';') {
+    return {type: 'call', line: identifier};
+  } else if (token == '=') {
+    var expr = readExpr(buffer);
+    buffer.shift(';', true);
+    return {type: 'assign', names: [identifier], exprs: [expr]};
+  } else {
+    buffer.unshift(token);
+    var variables = readVariables(buffer);
+    var names = [], exprs = [];
+    variables.forEach(function(variable) {
+      if (variable.value != null) {
+        names.push(variable.name);
+        exprs.push(variable.value);
+      }
+    });
+    return {type: 'assign', names: names, exprs: exprs};
   }
-  if (token != ';')
-    buffer.logError('Unexpected ' + token + ', expeccted ";"');
-  return new Tokens(stmt, lineNum);
+}
+
+function readIdentifier(buffer) {
+  var identifier = [];
+  if (!buffer.validate(buffer.current(), true)) return identifier;
+  identifier.push(buffer.shift());
+  var next = buffer.current(';');
+  while (next == '.' || next == '(' || next == '[') {
+    identifier.push(buffer.shift());
+    switch(next) {
+      case '.':
+        token = buffer.shift('<identifier>');
+        buffer.validate(token);
+        identifier.push(token);
+        break;
+      case '(':
+        if (buffer.current() != ')') {
+          do {
+            var expr = readExpr(buffer);
+            if (expr.length > 0) identifier.push(expr);
+            else buffer.log('Invalid expression');
+            var token  = buffer.shift(')');
+            identifier.push(token);
+          } while (token == ',');
+        } else identifier.push(buffer.shift(')', true));
+        break;
+      case '[':
+        identifier.push(readExpr(buffer));
+        identifier.push(buffer.shift(']', true));
+        break;
+    }
+    next = buffer.current(';');
+  }
+  return identifier;
 }
 
 
@@ -293,31 +332,47 @@ function readStatement(buffer) {
  * @return {Array} of strings (tokens)
  */
 function readExpr(buffer) {
-  var expr = [], stack = [];
-  var opens = ['{', '"', '(', '['];
-  var closes = ['}', '"', ')', ']'];
-  var map = {'{': '}', '"': '"', '(': ')', '[': ']'};
-  while (buffer.current(';') != ';') {
-    var token = buffer.shift();
-    if (stack.length == 0 && token == ',') {
-      buffer.unshift(',');
-      break;
-    }
-    if (stack[stack.length-1] != '"' && opens.indexOf(token) != -1)
-      stack.push(token);
-    else if (closes.indexOf(token) != -1
-        && map[stack[stack.length-1]] == token) stack.pop();
-    else if (closes.indexOf(token) != -1)
-      buffer.logError('Unexpected ' + token + ', expected ' + stack[stack.length-1]);
-    expr.push(token);
+  var token = buffer.current(';'), expr = [];
+  if (Tokens.isNumber(token)) {
+    expr.push(buffer.shift());
+  } else if (token == 'true' || token == 'false' || token == 'null') {
+    expr.push(buffer.shift());
+  } else if (token == 'new') {
+    buffer.shift();
+    expr.push(readIdentifier(buffer));
+  } else if (token == '"') {
+    buffer.shift();
+    var str = [];
+    do {
+      token = buffer.shift('"');
+      str.push(token);
+    } while (token != '"');
+    str.pop();
+    expr.push('"' + str.join(' ') + '"');
+  } else if (token == '{') {
+    var array = [];
+    buffer.shift();
+    if (buffer.current() != '}') {
+      do {
+        var elem = readExpr(buffer);
+        if (elem.length > 0) array.push(elem);
+        else buffer.log('Invalid expression');
+      } while (buffer.shift('}') == ',');
+    } else buffer.shift('}', true);
+    expr.push(['array', array]);
+  } else {
+    expr.push(readIdentifier(buffer));
   }
-  if (stack.length != 0)
-    buffer.logerror('unexpected ";", expected ' + stack[stack.length-1]);
+  if (OPERATORS.indexOf(buffer.current()) != -1) {
+    expr.push(buffer.shift());
+    expr.push(readExpr(buffer)); // concat?
+  }
   return expr;
 }
 
 /**
- * Pares the buffer for array syntax. The buffer should look like this:
+ * Parses the buffer for array syntax. The buffer should look like
+ * this:
  *    [ '[', ']', ... ]
  *
  * The method will remove the braces from the buffer. If the buffer
@@ -334,9 +389,26 @@ function parseArray(buffer, expect) {
   if (buffer.current(expect) != '[') return false;
   while (buffer.current() == '[') {
     buffer.shift();
-    if (buffer.shift() != ']') buffer.logError('Expected "]"');
+    buffer.shift(']', true);
   }
   return true;
+}
+
+function readVariables(buffer) {
+  var name = buffer.shift('<identifier>');
+  var variables = [];
+  do {
+    buffer.validate(name);
+    parseArray(buffer);
+    
+    var token = buffer.shift();
+    var value = token == '=' ? readExpr(buffer) : null;
+    if (token == '=') token = buffer.shift(';');
+
+    variables.push({name: name, value: value});
+    if (token == ',') name = buffer.shift('<identifier>');
+  } while (token == ',');
+  return variables;
 }
 
 
@@ -362,4 +434,3 @@ function run() {
 if (require.main == module) {
   run();
 }
-
