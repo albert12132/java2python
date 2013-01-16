@@ -28,6 +28,9 @@ app.configure('development', function(){
 });
 
 app.get('/', routes.index);
+app.get('/behavior', function(req, res) {
+  res.render('behavior', {});
+});
 app.post('/compile', compiler.compile);
 app.post('/export', routes.exportFile);
 

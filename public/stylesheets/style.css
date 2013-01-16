@@ -3,16 +3,11 @@
 body {
     margin:0;
     font: 18px "Julius Sans One", Helvetica, Arial, sans-serif;
+    min-width:630px;
 }
 
 #header {
-    /*background-color:#a4d3ee;*/
     background-color:#333333;
-    /*
-    border-style:none none solid none;
-    border-width:1px;
-    border-color:#999999;
-    */
     min-height:50px;
 }
 
@@ -23,9 +18,53 @@ body {
 }
 
 #logo h1 {
-    /*color:#111111;*/
+    margin:0;
+    padding:0;
+}
+
+#logo a {
     color:#eeeeee;
+    text-decoration:none;
+}
+
+#nav-bar {
+    position:absolute;
+    top:13px;
+    right:20px;
+}
+
+#nav-bar ul {
     margin:0;
 }
 
+#nav-bar li {
+    display:inline;
+}
 
+#about a{
+    border-style:none solid none none;
+}
+
+#behavior a {
+    border-style:none none none solid;
+}
+
+#nav-bar a {
+    border-color:#eee;
+    border-width:1px;
+    color:#eeeeee;
+    font-size:18pt;
+    font-weight:bold;
+    padding:0 15px;
+    text-decoration:none;
+    transition: background-color .2s linear;
+    -webkit-transition: background-color .2s linear;
+}
+
+#nav-bar a:hover {
+    background-color:#777;
+}
+
+#container {
+    padding:20px;
+}

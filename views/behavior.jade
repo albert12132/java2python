@@ -1,0 +1,231 @@
+extends layout
+
+block css
+  link(rel='stylesheet', href='/stylesheets/info.css')
+
+block content
+  h1 Compiler Behavior
+  ul#table-of-contents
+    li: a(href='#classes') Classes
+    li: a(href='#variables') Variables
+    li: a(href='#methods') Methods
+    li: a(href='#constructors') Constructors
+    li: a(href='#arrays') Arrays
+
+  h2#classes Classes
+  p.
+    Typically, Java classes translate fairly straightforward into
+    Python code.
+
+  h3 Inheritance
+  p.
+    Because Java does not support multiple inheritance, the resulting
+    Python code will only have one superclass. As of now, interfaces
+    are not supported.
+  .code-example
+    pre.java.
+      public class HelloWorld extends Example {
+          // body
+      }
+    pre.python.
+      class HelloWorld(Example):
+          pass
+
+  h3 Modifiers
+  p.
+    Certain Java modifiers are treated differently by the compiler.
+    Some modifiers are implicitly translated (such as <tt>static</tt>);
+    other modifiers are ignored completely. Here is a list of
+    modifiers:
+  ul
+    li <tt>public</tt>, <tt>private</tt>, <tt>protected</tt>: ignored
+    li <tt>static</tt>: implicit for variables, ignored for methods
+
+  h2#variables Variables
+  p.
+    Java's three types of variables -- local, instance, and static --
+    translate directly into their Python counterparts (static variables
+    become class variables).
+
+  h3 Class/static Variables
+  p.
+    Class variable declarations are the first block of code following
+    the class signature. If a static variable is not initialized, only
+    declared, then it will not appear in the Python code (since Python
+    does not require variable declarations).
+  .code-example
+    pre.java.
+      class Ex {
+          static int x = 4, y;
+      }
+    pre.python.
+      class Ex(object):
+          x = 4
+  p.
+    In methods, class variables are referred to by using dot notation
+    in conjuction with the class name:
+  .code-example
+    pre.java.
+      class Ex {
+          static int x = 4, y;
+          int foo() {
+              y = x + 5;
+              return y;
+          }
+      }
+    pre.python.
+      class Ex(object):
+          x = 4
+
+          def foo(self):
+              Ex.y = Ex.x + 5
+              return Ex.y
+
+  h3 Instance variables
+  p.
+    Instance variables are declared inside of the <tt>__init__</tt>
+    method of the Python class (equivalent to Java's constructors).
+    They are always referred to preceded by <tt>self.</tt> As with
+    class variables, if an instance variable is not initialized, it
+    will not be present in the Python code's constructor.
+  .code-example
+    pre.java.
+      class Ex {
+          int x = 3, y;
+          int foo() {
+              y = x + 3;
+              return y;
+          }
+      }
+    pre.python.
+      class Ex(object):
+          def __init__(self):
+              self.x = 3
+
+          def foo(self):
+              self.y = self.x + 3
+              return self.y
+
+  h3 Local variables
+  p.
+    Local variables remain the way they are, without any dot
+    expressions preceding them.
+  .code-example
+    pre.java.
+      class Ex {
+          int foo() {
+              int y = 4 + 5;
+              return y;
+          }
+      }
+    pre.python.
+      class Ex(object):
+          def foo(self):
+              y = 4 + 5
+              return y
+
+  h2#methods Methods
+  p.
+    Methods will always take at least one argument in Python -- the
+    first argument is always <tt>self</tt>.
+  .code-example
+    pre.java.
+      class Ex {
+          int foo(int a, String b) {
+              return a;
+          }
+      }
+    pre.python.
+      class Ex(object):
+          def foo(self, a, b):
+              return a
+
+  p.
+    The tricky part about compiling Java to Python is method
+    overloading. In Python, methods cannot be overloaded because they
+    will collide in the class's namespace. One workaround takes
+    advantage of Python's star (*) notation, which allows functions
+    to take in an arbitrary number of arguments.
+  .code-example
+    pre.java.
+      class Ex {
+          int foo() {
+              return 3;
+          }
+          int foo(int x) {
+              return x;
+          }
+          int foo(int z, int y) {
+              return z + y;
+          }
+      }
+    pre.python.
+      class Ex(object):
+          def foo(self, *args):
+              if len(args) == 0:
+                  return 3
+              elif len(args) == 1:
+                  (x,) = args
+                  return x
+              elif len(args) == 2:
+                  (z, y,) = args
+                  return z + y
+  p.
+    Notice that the arguments for each overloaded method are unpacked
+    into parameters that correspond to their Java counterparts.
+
+  h2#constructors Constructors
+  p.
+    Constructors are written into the <tt>__init__</tt> method, after
+    any instance variable declarations. Constructor overloading is
+    resolved just like method overloading.
+  .code-example
+    pre.java.
+      class Ex {
+          int x = 4, y;
+          Ex() {
+              y = 5;
+          }
+          Ex(int y) {
+              this.y = y;
+          }
+      }
+    pre.python.
+      class Ex(object):
+          def __init__(self, *args):
+              self.x = 4
+              if len(args) == 0:
+                  self.y = 5
+              elif len(args) == 1:
+                  (y,) = args
+                  self.y = y
+
+  h2#arrays Arrays
+  p.
+    Array 'literals' are converted into Python lists.
+  .code-example
+    pre.java.
+      class Ex {
+          int[] x = {1, 2, 3, 4};
+      }
+    pre.python.
+      class Ex(object):
+          def __init__(self, *args):
+              self.x = [1, 2, 3, 4]
+  p.
+    Array constructors are converted into Python list comprehensions.
+    The default element depends on the datatype of the array:
+  .code-example
+    pre.java.
+      class Ex {
+          int[] x = new int[3];
+          boolean[] b = new boolean[2][3];
+          String s[] = new String[3];
+      }
+    pre.python.
+      class Ex(object):
+          def __init__(self, *args):
+              self.x = [0 for _ in range(3)]
+              self.b = [[False for _ in range(3)] for _ in range(2)]
+              self.s = [None for _ in range(3)]
+

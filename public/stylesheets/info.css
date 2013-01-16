@@ -1,0 +1,36 @@
+#container h2 {
+    font-size:30px;
+}
+
+#container h2, #container h3 {
+    margin-top:30px;
+}
+
+#container p {
+    font: 18px sans-serif;
+}
+
+pre {
+    font: 18px monospace;
+    width:500px;
+    max-height:200px;
+    overflow:scroll;
+    display:inline-block;
+    padding:10px;
+}
+
+#table-of-contents li, #table-of-contents a {
+    padding:5px;
+}
+
+#table-of-contents a, #table-of-contents a:visited {
+    font-weight:bold;
+    text-decoration:none;
+    color:#222;
+    transition: background-color .2s linear;
+    -webkit-transition: background-color .2s linear;
+}
+
+#table-of-contents a:hover {
+    background-color:#ddd;
+}
