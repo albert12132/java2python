@@ -27,9 +27,9 @@
 
 var interface = require('./interface')
   , Tokens = interface.Tokens
+  , CONTROLS = interface.CONTROLS
+  , OPERATORS = interface.OPERATORS;
 var TAB = '    ';
-var CONTROLS = [];
-var OPERATORS = ['+', '-', '*', '/', '(', '==', '&&', '||', '&', '|'];
 
 /*---------*
  * EXPORTS *
@@ -149,6 +149,19 @@ function translateConstructors(cls) {
  * method bodies are then placed in the suites of their respective
  * if/elif block.
  *
+ * NOT OVERLOADED:
+ *    def <name>(self [, arg1] [, arg2]):
+ *        <body>
+ *
+ * OVERLOADED:
+ *    def <name>(self, *args):
+ *        if len(args) == <num>:
+ *            (arg1, arg2) = args
+ *            <body>
+ *        elif len(args) == <num>:
+ *            (arg1, arg2) = args
+ *            <body>
+ *
  * @param method {string} name of method
  * @param cls {Class} object
  *
@@ -170,6 +183,26 @@ function translateMethod(method, cls) {
   return signature + '\n' + tab(body) + '\n\n';
 }
 
+/**
+ * Translates the main methods into a Python if block at the end of the
+ * document. Classes that have main methods will be included in this
+ * suite.
+ *
+ *    if __name__ == '__main__':
+ *        import sys
+ *        assert len(sys.argv) > 1
+ *        if sys.argv[1] == <class name>:
+ *            <class name>.main(sys.argv[2:])
+ *
+ * The code implies that, when calling the Python script, the class
+ * names should be passed as the first command line argument (after
+ * the script name).
+ *    python3 <script> <class name>
+ *
+ * @param classes {Array} of {Class} objects
+ *
+ * @returns {string} code
+ */
 function translateMain(classes) {
   var signature = 'if __name__ == "__main__":' + '\n';
   signature += tab('import sys') + '\n';
@@ -258,8 +291,11 @@ function writeOverloadBody(methods, cls) {
  *    - Variable assignment
  *        [datatype] <identifier> = <expression>;
  *
+ * This method directly corresponds to the readStatement function in
+ * the parser.js module.
  *
- * @param stmts {Array} of {Tokens} buffers.
+ *
+ * @param stmts {Array} of {Object}s (see parser.js for properties)
  * @param params {Array} of {strings}, the parameters to the method
  * @param cls {Class} object
  *
@@ -281,60 +317,69 @@ function writeBody(stmts, params, cls) {
           if (locals.indexOf(variable.name) != -1)
             throw variable.name + ' is already a local variable';
           else locals.push(variable.name);
-          if (variable.value != null) code.push(variable.name + ' = ' 
+          if (variable.value != null) code.push(variable.name + ' = '
               + writeExpr(variable.value, locals, cls));
         });
         return code.join('\n');
       case 'assign':
-        return writeIdentifier(stmt.name, locals, cls) + ' = ' 
+        return writeIdentifier(stmt.name, locals, cls) + ' = '
           + writeExpr(stmt.expr, locals, cls);
     }
   });
   return body.join('\n');
 }
 
+/**
+ * Writes an identifier, as well as any attributes it may have.
+ * Directly corresponds to the parseIdentifier and parseAttribute
+ * functions in the parser.js module.
+ *
+ * @param line {Array}
+ * @param locals {Array} of local variables (strings)
+ * @param cls {Class} object
+ *
+ * @returns {string} code
+ */
 function writeIdentifier(line, locals, cls) {
-  var identifier = "";
-  var first = line[0];
-  if (locals.indexOf(first) == -1) {
-    var attr = cls.get('v', first) || cls.get('m', first);
+  var name = [];
+  if (locals.indexOf(line[0]) == -1) {
+    var attr = cls.get('v', line[0]) || cls.get('m', line[0]);
     if (attr) {
       if (attr.mods && attr.mods.static)
-        identifier += cls.name + '.';
-      else identifier += 'self.';
+        name.push(cls.name + '.');
+      else name.push('self.');
     }
   }
   while (line.length > 0) {
     var token = line.shift();
     if (Array.isArray(token)) {
-      identifier += writeExpr(token, locals, cls);
+      name.push(writeExpr(token, locals, cls));
     } else if (token == ',') {
-      identifier += ', ';
+      name.push(', ');
     } else if (token == 'this') {
-      identifier += 'self';
-    } else if(token == 'length' 
-      && identifier.charAt(identifier.length-1) == '.') {
-      identifier = 'len(' 
-        + identifier.substring(0, identifier.length-1) + ')';
-    } else if (token == 'equals'
-      && identifier.charAt(identifier.length-1) == '.') {
-      identifier = identifier.substring(0, identifier.length-1) + 
-        ' == ' + line.shift();
-      identifier += writeExpr(line.shift(), locals, cls);
-      identifier += line.shift();
+      name.push('self');
+    } else if(token == 'length' && name[name.length - 1] == '.') {
+      name.pop();
+      name = ['len(', name.join(''), ')'];
+    } else if (token == 'equals' && name[name.length - 1] == '.') {
+      name.pop();
+      name = [name.join(''), ' == ', line.shift(),
+           writeExpr(line.shift(), locals, cls), line.shift()];
     } else {
-      identifier += token;
+      name.push(token);
     } // SPECIALs, like length and equals
   }
-  identifier = identifier.replace('System.out.println', 'print');
-  return identifier;
+  name = name.join('');
+  name = name.replace('System.out.println', 'print');
+  return name;
 }
 
 
 /**
- * Writes a complete expression.
+ * Writes a complete expression. Directly corresponds to the
+ * parseExpr function in the parser.js module.
  *
- * @param line {Tokens}
+ * @param line {Array}
  * @param locals {Array} of local parameters
  * @param cls {Class} object
  *
@@ -354,6 +399,9 @@ function writeExpr(line, locals, cls) {
     expr = 'False';
   } else if (token == 'null') {
     expr = 'None';
+  } else if (token == '(') {
+    expr = line.shift() + writeExpr(line.shift(), locals, cls)
+        + ')';
   } else {
     expr = token;
   }
@@ -365,34 +413,6 @@ function writeExpr(line, locals, cls) {
     expr += ' ' + op + ' ' + writeExpr(line[2], locals, cls);
   }
   return expr;
-}
-
-function writeSpecial(stmt) {
-  if (stmt.indexOf('System.out.println') == 0) {
-    return stmt.replace('System.out.println', 'print');
-  }
-}
-
-var SPECIAL = ['length', 'equals'];
-
-function convertSpecial(token, identifier, line, locals, cls) {
-  switch(token) {
-    case 'length':
-      var revised = 'len(' + identifier.join('.') + ')';
-      if (!line.empty() && line.current() == '(') {
-        line.shift();
-        if (line.shift(')') != ')') line.logError('expected ")"');
-      }
-      return revised;
-    case 'equals':
-      var revised = identifier.join('.') + ' == ';
-      var other = writeExpr(line, locals, cls);
-      revised += other;
-      line.shift(')');
-      if (!line.empty()) revised = '(' + revised + ')';
-      return revised;
-
-  }
 }
 
 

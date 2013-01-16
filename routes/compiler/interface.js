@@ -5,9 +5,7 @@
  *  - {Tokens} class: used by Parser
  *  - DELIMS, KEYWORDS, DATATYPES:
  *      arrays of Java language-related tokens
- *  - Exceptions:
- *      ParseException: thrown by Parser
- *  - Abstract Data Types
+ *  - Wrappers
  *      - Class
  *      - Method: used for both methods and constructors
  *      - Variable
@@ -25,14 +23,10 @@ var KEYWORDS = [
   'while', 'for', // 'do', 'break', 'continue',
   // 'try', 'catch', 'finally',
   'true', 'false', 'null',
-]
-var DATATYPES = [
-  'boolean', 'byte', 'char', 'double', 'float', 'int', 'long', 'short',
-]
+];
+var OPERATORS = ['+', '-', '*', '/', '==', '&&', '||'];
+var CONTROLS = [];
 
-/*-------------*
- * SUBROUTINES *
- *-------------*/
 
 /*--------------*
  * TOKEN BUFFER *
@@ -57,17 +51,6 @@ function Tokens(code, lineNum) {
 
 
 /**
- * Same as {string} version of {join}
- *
- * @param delim delimiter placed in between each element
- *
- * @return {string}
- */
-Tokens.prototype.join = function(delim) {
-  return this.tokens.join(delim);
-}
-
-/**
  * Tokenizes a string of code. The process:
  *  - replace all newlines with spaces
  *  - pad delimiters with spaces
@@ -78,6 +61,7 @@ Tokens.prototype.join = function(delim) {
  * @returns {Array} of strings, referred to as 'tokens'
  */
 Tokens.tokenize = function(code) {
+  code = code.trimRight();
   code = code.replace(/\/\/.*\n/g, '\n');
   code = code.replace(/\+\+/g, ' ++ ').replace(/--/g, ' -- ');
   code = code.replace(/==/g, ' == ');
@@ -150,7 +134,7 @@ Tokens.prototype.shift = function(expect, log) {
     this.lines.shift();
     this.lineNum++;
     this.curLine = [];
-  } 
+  }
   if (this.lines.length == 0) {
     this.logError('Unexpected EOF. Expected "' + expect + '".');
     this.publishErrors();
@@ -172,6 +156,12 @@ Tokens.prototype.unshift = function(item) {
   else this.lines[0].unshift(item);
 };
 
+/**
+ * Logs an error found in the buffer. The error will retain the line
+ * number, the tokens on the line. and an error message.
+ *
+ * @param msg {string}
+ */
 Tokens.prototype.logError = function(msg) {
   var line = this.curLine.join(' ');
   if (this.lines[0]) line += ' ' + this.lines[0].join(' ');
@@ -183,6 +173,9 @@ Tokens.prototype.logError = function(msg) {
   this.errors.push(error);
 };
 
+/**
+ * Publishes errors, which causes an exception to be thrown.
+ */
 Tokens.prototype.publishErrors = function() {
   var msg = this.errors.map(function(error) {
     return 'WARNING: line ' + error.row + ':\n'
@@ -191,6 +184,9 @@ Tokens.prototype.publishErrors = function() {
   throw msg;
 }
 
+/**
+ * Logs an error if the actual token does not match what is expected.
+ */
 Tokens.prototype.expect = function(expect, actual) {
   if (expect != actual)
     this.logError('Unexpected ' + actual + ', expected ' + expect);
@@ -228,9 +224,9 @@ Tokens.isNumber = function(token) {
 
 
 
-/*---------------------*
- * ABSTRACT DATA TYPES *
- *---------------------*/
+/*----------*
+ * WRAPPERS *
+ *----------*/
 
 /**
  * Represents a Java class
@@ -407,9 +403,9 @@ function Method(mods, name, args, body) {
  * EXPORTS *
  *---------*/
 
-exports.DELIMS = DELIMS;
 exports.KEYWORDS = KEYWORDS;
-exports.DATATYPES = DATATYPES;
+exports.OPERATORS = OPERATORS;
+exports.CONTROLS = CONTROLS;
 exports.Tokens = Tokens;
 exports.Class = Class;
 exports.Method = Method;
