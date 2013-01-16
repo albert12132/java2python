@@ -21,6 +21,7 @@ app.configure(function(){
   app.use(express.methodOverride());
   app.use(app.router);
   app.use(express.static(path.join(__dirname, 'public')));
+  app.use(express.static(path.join(__dirname, 'prettify')));
 });
 
 app.configure('development', function(){
@@ -30,6 +31,9 @@ app.configure('development', function(){
 app.get('/', routes.index);
 app.get('/behavior', function(req, res) {
   res.render('behavior', {});
+});
+app.get('/about', function(req, res) {
+  res.render('about', {});
 });
 app.post('/compile', compiler.compile);
 app.post('/export', routes.exportFile);

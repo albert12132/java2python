@@ -1,4 +1,22 @@
 extends layout
 
+block css
+  link(rel='stylesheet', href='/stylesheets/info.css')
+
 block content
-  h2 About
+  h1 About the Project
+
+  p.
+    "Java to Python" is a compiler written entirely in JavaScript,
+    using <a href='http://nodejs.org/'>node.js</a>. Source code can be
+    found on GitHub at <a href='https://github.com/albert12132/java2python'>https://github.com/albert12132/java2python</a>
+
+  p.
+    The front end uses the following:
+  ul
+    li Rendering engine: <a href='http://jade-lang.com/'>Jade</a>
+    li Code editor: <a href='http://ace.ajax.org/#nav=about'>ACE</a>
+    li Syntax highlighting: <a href='http://code.google.com/p/google-code-prettify/'>Prettify</a>
+
+  p.
+    Created by Albert Wu. Last updated Jan. 2013
