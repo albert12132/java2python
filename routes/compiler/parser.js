@@ -259,61 +259,44 @@ function readStatement(buffer) {
     token = buffer.shift();
   }
   var identifier = readIdentifier(buffer);
-  token = buffer.shift(';');
-  if (token == ';') {
-    return {type: 'call', line: identifier};
-  } else if (token == '=') {
+  if (parseArray(buffer)) {
+    var variables = readVariables(buffer);
+    return {type: 'declare', variables: variables};
+  } else if (buffer.current(';') == '=') {
+    buffer.shift();
     var expr = readExpr(buffer);
     buffer.shift(';', true);
-    return {type: 'assign', names: [identifier], exprs: [expr]};
-  } else {
-    buffer.unshift(token);
+    return {type: 'assign', name: identifier, expr: expr};
+  } else if (buffer.validate(buffer.current(), true)) {
     var variables = readVariables(buffer);
-    var names = [], exprs = [];
-    variables.forEach(function(variable) {
-      if (variable.value != null) {
-        names.push(variable.name);
-        exprs.push(variable.value);
-      }
-    });
-    return {type: 'assign', names: names, exprs: exprs};
+    return {type: 'declare', variables: variables};
+  } else {
+    parseAttribute(identifier, buffer);
+    if (buffer.current(';') == '=') {
+      buffer.shift();
+      var expr = readExpr(buffer);
+      buffer.shift();
+      return {type: 'assign', name: identifier, expr: expr};
+    } else {
+      buffer.shift(';', true);
+      return {type: 'call', line: identifier};
+    }
   }
 }
 
 function readIdentifier(buffer) {
-  var identifier = [];
-  if (!buffer.validate(buffer.current(), true)) return identifier;
-  identifier.push(buffer.shift());
-  var next = buffer.current(';');
-  while (next == '.' || next == '(' || next == '[') {
-    identifier.push(buffer.shift());
-    switch(next) {
-      case '.':
-        token = buffer.shift('<identifier>');
-        buffer.validate(token);
-        identifier.push(token);
-        break;
-      case '(':
-        if (buffer.current() != ')') {
-          do {
-            var expr = readExpr(buffer);
-            if (expr.length > 0) identifier.push(expr);
-            else buffer.log('Invalid expression');
-            var token  = buffer.shift(')');
-            identifier.push(token);
-          } while (token == ',');
-        } else identifier.push(buffer.shift(')', true));
-        break;
-      case '[':
-        identifier.push(readExpr(buffer));
-        identifier.push(buffer.shift(']', true));
-        break;
-    }
-    next = buffer.current(';');
+  if (!buffer.validate(buffer.current(), true)) return [];
+  var token = buffer.shift('<identifier>');
+  buffer.validate(token);
+  var identifier = [token];
+  while (buffer.current() == '.') {
+    identifier.push(buffer.shift('.', true));
+    token = buffer.shift();
+    buffer.validate(token);
+    identifier.push(token);
   }
   return identifier;
 }
-
 
 /*-------------*
  * SUBROUTINES *
@@ -339,7 +322,9 @@ function readExpr(buffer) {
     expr.push(buffer.shift());
   } else if (token == 'new') {
     buffer.shift();
-    expr.push(readIdentifier(buffer));
+    var identifier = readIdentifier(buffer);
+    parseAttribute(identifier, buffer);
+    expr.push(identifier);
   } else if (token == '"') {
     buffer.shift();
     var str = [];
@@ -361,7 +346,10 @@ function readExpr(buffer) {
     } else buffer.shift('}', true);
     expr.push(['array', array]);
   } else {
-    expr.push(readIdentifier(buffer));
+    var identifier = readIdentifier(buffer);
+    if (identifier.length == 0) return [];
+    parseAttribute(identifier, buffer);
+    expr.push(identifier);
   }
   if (OPERATORS.indexOf(buffer.current()) != -1) {
     expr.push(buffer.shift());
@@ -387,6 +375,12 @@ function readExpr(buffer) {
  */
 function parseArray(buffer, expect) {
   if (buffer.current(expect) != '[') return false;
+  var token = buffer.shift();
+  if (buffer.current() != ']') {
+    buffer.unshift(token);
+    return false;
+  }
+  buffer.shift();
   while (buffer.current() == '[') {
     buffer.shift();
     buffer.shift(']', true);
@@ -400,7 +394,7 @@ function readVariables(buffer) {
   do {
     buffer.validate(name);
     parseArray(buffer);
-    
+
     var token = buffer.shift();
     var value = token == '=' ? readExpr(buffer) : null;
     if (token == '=') token = buffer.shift(';');
@@ -409,6 +403,46 @@ function readVariables(buffer) {
     if (token == ',') name = buffer.shift('<identifier>');
   } while (token == ',');
   return variables;
+}
+
+function parseAttribute(identifier, buffer) {
+  var token = buffer.current();
+  while (token == '.' || token == '(' || token == '[') {
+    identifier.push(token);
+    switch(buffer.shift()) {
+      case '.':
+        var name = buffer.shift('<identifier>');
+        buffer.validate(name);
+        identifier.push(name);
+        break;
+      case '[':
+        var expr = readExpr(buffer);
+        if (expr.length == 0)
+          buffer.logError('Expected expression after "["');
+        identifier.push(expr);
+        identifier.push(buffer.shift(']', true));
+        break;
+      case '(':
+        if (buffer.current() == ')') {
+          identifier.push(buffer.shift());
+          break;
+        }
+        do {
+          var arg = readExpr(buffer);
+          if (arg.length == 0) buffer.logError('Expected argument');
+          identifier.push(arg);
+          token = buffer.shift(')');
+          identifier.push(token);
+        } while (token == ',');
+        buffer.expect(')', token);
+        break;
+      default:
+        buffer.logError('Unexpected ' + token);
+        break;
+    }
+    token = buffer.current();
+  }
+  return identifier;
 }
 
 

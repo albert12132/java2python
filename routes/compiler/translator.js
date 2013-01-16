@@ -270,19 +270,24 @@ function writeBody(stmts, params, cls) {
   body = stmts.map(function(stmt) {
     switch(stmt.type) {
       case 'return':
-        if (stmt.expr == 'None') return 'return';
+        if (stmt.expr.length == 0) return 'return';
         else return 'return ' + writeExpr(stmt.expr, locals, cls);
       case 'call':
         var identifier = writeIdentifier(stmt.line, locals, cls);
         return identifier;
+      case 'declare':
+        var code = [];
+        stmt.variables.forEach(function(variable) {
+          if (locals.indexOf(variable.name) != -1)
+            throw variable.name + ' is already a local variable';
+          else locals.push(variable.name);
+          if (variable.value != null) code.push(variable.name + ' = ' 
+              + writeExpr(variable.value, locals, cls));
+        });
+        return code.join('\n');
       case 'assign':
-        var assigns = [];
-        for (var i = 0; i < stmt.names.length; i++) {
-          var identifier = stmt.names[i];
-          var value = writeExpr(stmt.exprs[i], locals, cls);
-          assigns.push(identifier + ' = ' + value);
-        }
-        return assigns.join('\n');
+        return writeIdentifier(stmt.name, locals, cls) + ' = ' 
+          + writeExpr(stmt.expr, locals, cls);
     }
   });
   return body.join('\n');

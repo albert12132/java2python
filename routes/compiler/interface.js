@@ -20,7 +20,7 @@ var KEYWORDS = [
   'class', // 'interface', 'enum',
   'extends', // 'implements', 'throws',
   'return', 'new', // 'instanceof',
-  'this', // 'super',
+  // 'super',
   'if', 'else', // 'switch', 'case', 'default',
   'while', 'for', // 'do', 'break', 'continue',
   // 'try', 'catch', 'finally',
