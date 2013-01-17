@@ -20,8 +20,6 @@ Issues and improvements
 * String method parsing
 * Protection modifiers
 * Control structures
-    * `while`
-    * `for`
     * ` ? : `
 * Data Structures:
     * Arrays -> lists

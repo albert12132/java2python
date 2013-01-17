@@ -336,14 +336,26 @@ function writeStatement(stmt, locals, cls) {
       }).join('\n');
     case 'if':
       var code = 'if ' + writeExpr(stmt.pred, locals, cls) + ':\n';
-      code += tab(writeStatement(stmt.suite, locals, cls)) + '\n';
+      code += tab(writeStatement(stmt.suite, locals, cls));
       if (typeof stmt.else != 'undefined')
         if (stmt.else.type == 'if') {
-          code += 'el' + writeStatement(stmt.else, locals, cls);
+          code += '\nel' + writeStatement(stmt.else, locals, cls);
         } else {
-          code += 'else:\n'
+          code += '\nelse:\n'
               + tab(writeStatement(stmt.else, locals, cls));
         }
+      return code;
+    case 'while':
+      var code = 'while ' + writeExpr(stmt.pred, locals, cls) + ':\n';
+      code += tab(writeStatement(stmt.body, locals, cls));
+      return code;
+    case 'for':
+      var code = '';
+      if (stmt.init.type != 'call' || stmt.intit.line.length > 0)
+        code = writeStatement(stmt.init, locals, cls) + '\n';
+      code += 'while ' + writeExpr(stmt.pred, locals, cls) + ':\n';
+      code += tab(writeStatement(stmt.body, locals, cls) + '\n'
+          + writeStatement(stmt.incr, locals, cls));
       return code;
   }
 }

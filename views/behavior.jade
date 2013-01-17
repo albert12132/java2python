@@ -9,18 +9,29 @@ block content
   h1 Compiler Behavior
   ul#table-of-contents
     li: a(href='#classes') Classes
+    ul
+      li: a(href='#inheritance') Inheritance
+      li: a(href='#modifiers') Modifiers
     li: a(href='#variables') Variables
+    ul
+      li: a(href='#class-variables') Class/Static Variables
+      li: a(href='#instance-variables') Instance Variables
+      li: a(href='#local-variables') Local Variables
     li: a(href='#methods') Methods
     li: a(href='#constructors') Constructors
     li: a(href='#arrays') Arrays
     li: a(href='#controls') Control Structures
+    ul
+      li: a(href='#ifelse') <tt>if</tt>/<tt>else</tt>
+      li: a(href='#while') <tt>while</tt> loops
+      li: a(href='#for') <tt>for</tt> loops
 
   h2#classes Classes
   p.
     Typically, Java classes translate fairly straightforward into
     Python code.
 
-  h3 Inheritance
+  h3#inheritance Inheritance
   p.
     Because Java does not support multiple inheritance, the resulting
     Python code will only have one superclass. As of now, interfaces
@@ -34,7 +45,7 @@ block content
       class HelloWorld(Example):
           pass
 
-  h3 Modifiers
+  h3#modifiers Modifiers
   p.
     Certain Java modifiers are treated differently by the compiler.
     Some modifiers are implicitly translated (such as <tt>static</tt>);
@@ -50,7 +61,7 @@ block content
     translate directly into their Python counterparts (static variables
     become class variables).
 
-  h3 Class/static Variables
+  h3#class-variables Class/static Variables
   p.
     Class variable declarations are the first block of code following
     the class signature. If a static variable is not initialized, only
@@ -85,7 +96,7 @@ block content
               Ex.y = Ex.x + 5
               return Ex.y
 
-  h3 Instance variables
+  h3#instance-variables Instance variables
   p.
     Instance variables are declared inside of the <tt>__init__</tt>
     method of the Python class (equivalent to Java's constructors).
@@ -109,7 +120,7 @@ block content
           def foo(self):
               self.y = self.x + 3
               return self.y
-  h3 Local variables
+  h3#local-variables Local variables
   p.
     Local variables remain the way they are, without any dot
     expressions preceding them.
@@ -260,6 +271,55 @@ block content
                   return 1
               else:
                   return x
+  h3#while <tt>while</tt> loops
+  p.
+    <tt>while</tt> loops convert as expected:
+  .code-example
+    pre.prettyprint.
+      class Ex {
+          int foo(int x) {
+              while (x > 0) {
+                  x = x - 1;
+                  System.out.println(x);
+              }
+              return 0;
+          }
+      }
+    pre.prettyprint.
+      class Ex(object):
+          def foo(self, x):
+              while x > 0:
+                  x = x - 1
+                  print(x)
+              return 0
+
+
+
+  h3#for <tt>for</tt> loops
+  p.
+    Java supports two types of <tt>for</tt> loops: the C-style
+    <tt>for</tt> loop; and the iterator-style <tt>for</tt> loop.
+
+  p.
+    The C-style <tt>for</tt> loop has no direct Python equivalent;
+    instead, it is rewritten as a while loop.
+  .code-example
+    pre.prettyprint.
+      class Ex {
+          void foo() {
+              for (int i = 0; i < 10; i = i + 1) {
+                  System.out.println("index " + i);
+              }
+          }
+      }
+    pre.prettyprint.
+      class Ex(object):
+          def foo(self):
+              i = 0
+              while i < 10:
+                  print("index " + i)
+                  i = i + 1
+
 block scripts
   script.
     window.onload = prettyPrint();

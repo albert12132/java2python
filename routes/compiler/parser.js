@@ -248,7 +248,7 @@ function parseBody(buffer) {
  *        type: 'declare', variables: {Array} of {Object}s
  *        type: 'call', line: {Array}
  */
-function readStatement(buffer) {
+function readStatement(buffer, end) {
   var token = buffer.current(';');
   if (token == '{') {
     buffer.shift();
@@ -277,9 +277,28 @@ function readStatement(buffer) {
           elseClause = readStatement(buffer);
         }
         return {type: 'if', pred: expr, suite: stmt, else: elseClause};
-        break;
+      case 'else':
+        buffer.shift();
+        buffer.logError('Unexpected "else".');
+        return;
+      case 'while':
+        buffer.shift();
+        buffer.shift('(', true);
+        var expr = parseExpr(buffer);
+        buffer.shift(')', true);
+        var stmt = readStatement(buffer);
+        return {type: 'while', pred: expr, body: stmt};
+      case 'for':
+        buffer.shift();
+        buffer.shift('(', true);
+        var init = readStatement(buffer);
+        var pred = parseExpr(buffer);
+        buffer.shift(';');
+        var incr = readStatement(buffer, ')');
+        var body = readStatement(buffer);
+        return {type: 'for', init: init, pred: pred, incr: incr,
+            body: body};
     }
-    return;
   } else if (token == 'new') {
     token = buffer.shift();
   }
@@ -289,17 +308,20 @@ function readStatement(buffer) {
   } else if (buffer.current(';') == '=') {
     buffer.shift('=', true);
     var expr = parseExpr(buffer);
-    buffer.shift(';', true);
+    if (typeof end != 'undefined') buffer.shift(end, true);
+    else buffer.shift(';', true);
     return {type: 'assign', name: identifier, expr: expr};
   } else {
     parseAttribute(identifier, buffer);
     if (buffer.current(';') == '=') {
       buffer.shift('=', true);
       var expr = parseExpr(buffer);
-      buffer.shift(';', true);
+      if (typeof end != 'undefined') buffer.shift(end, true);
+      else buffer.shift(';', true);
       return {type: 'assign', name: identifier, expr: expr};
     } else {
-      buffer.shift(';', true);
+      if (typeof end != 'undefined') buffer.shift(end, true);
+      else buffer.shift(';', true);
       return {type: 'call', line: identifier};
     }
   }

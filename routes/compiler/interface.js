@@ -53,7 +53,7 @@ var OPERATORS = [
   '==', '<=', '>=', '!=',
   '&', '&&', '||', '!'
 ];
-var CONTROLS = ['if'];
+var CONTROLS = ['if', 'else', 'while', 'for'];
 
 
 /*--------------*
