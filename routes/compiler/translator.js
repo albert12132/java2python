@@ -334,6 +334,9 @@ function writeStatement(stmt, locals, cls) {
       return stmt.stmts.map(function(statement) {
         return writeStatement(statement, locals, cls);
       }).join('\n');
+    case 'incr':
+      var op = stmt.op == '++' ? ' += 1' : ' -= 1';
+      return writeIdentifier(stmt.name, locals, cls) + op;
     case 'if':
       var code = 'if ' + writeExpr(stmt.pred, locals, cls) + ':\n';
       code += tab(writeStatement(stmt.suite, locals, cls));

@@ -258,6 +258,11 @@ function readStatement(buffer, end) {
     }
     buffer.shift('}', true);
     return {type: 'block', stmts: stmts};
+  } else if (token == '++' || token == '--') {
+    var op = buffer.shift();
+    var identifier = parseIdentifier(buffer);
+    buffer.shift(';', true);
+    return {type: 'incr', name: identifier, op: op};
   } else if (token == 'return') {
     buffer.shift('return', true);
     var expr = parseExpr(buffer);
@@ -303,7 +308,12 @@ function readStatement(buffer, end) {
     token = buffer.shift();
   }
   var identifier = parseIdentifier(buffer);
-  if (parseArray(buffer) || buffer.validate(buffer.current(), true)) {
+  if (buffer.current() == '++' || buffer.current() == '--') {
+    var op = buffer.shift();
+    buffer.shift(end || ';', true);
+    return {type: 'incr', name: identifier, op: op};
+  } else if (parseArray(buffer) 
+      || buffer.validate(buffer.current(), true)) {
     return {type: 'declare', variables: parseVariables(buffer)};
   } else if (buffer.current(';').search(/^[+*/-]?=$/) != -1) {
     var op = buffer.shift();
