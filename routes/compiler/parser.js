@@ -305,20 +305,20 @@ function readStatement(buffer, end) {
   var identifier = parseIdentifier(buffer);
   if (parseArray(buffer) || buffer.validate(buffer.current(), true)) {
     return {type: 'declare', variables: parseVariables(buffer)};
-  } else if (buffer.current(';') == '=') {
-    buffer.shift('=', true);
+  } else if (buffer.current(';').search(/^[+*/-]?=$/) != -1) {
+    var op = buffer.shift();
     var expr = parseExpr(buffer);
     if (typeof end != 'undefined') buffer.shift(end, true);
     else buffer.shift(';', true);
-    return {type: 'assign', name: identifier, expr: expr};
+    return {type: 'assign', op: op, name: identifier, expr: expr};
   } else {
     parseAttribute(identifier, buffer);
-    if (buffer.current(';') == '=') {
-      buffer.shift('=', true);
+    if (buffer.current(';').search(/^[+*/-]?=$/) != -1) {
+      var op = buffer.shift();
       var expr = parseExpr(buffer);
       if (typeof end != 'undefined') buffer.shift(end, true);
       else buffer.shift(';', true);
-      return {type: 'assign', name: identifier, expr: expr};
+      return {type: 'assign', op: op, name: identifier, expr: expr};
     } else {
       if (typeof end != 'undefined') buffer.shift(end, true);
       else buffer.shift(';', true);

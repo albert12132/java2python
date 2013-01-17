@@ -23,11 +23,15 @@ var DELIMS = [
   // string
   /(.)(")/g,
   // arithmetic operators
-  /([^+])(\+)(?!\+)/g, /([^-])(-)(?!-)/g, /(.)(\*)/g, /(.)(\/)/g,
+  /([^+])(\+)(?![+=])/g, /([^-])(-)(?![=-])/g, /(.)(\*)(?!=)/g, 
+  /(.)(\/)(?!=)/g, /(.)(%)/g,
   // ++ and --
   /(.)(\+\+)/g, /(.)(--)/g,
-  // assignment and single-character logical operators
-  /([^=<>!])(=)(?!=)/g, /(.)(<)(?!=)/g, /(.)(>)(?!=)/g, /(.)(!)(?!=)/g,
+  // assignment
+  /([^=<>!+*/-])(=)(?!=)/g, /(.)(\+=)/g, /(.)(-=)/g, /(.)(\*=)/g,
+  /(.)(\/=)/g,
+  // single-character logical operators
+  /(.)(<)(?!=)/g, /(.)(>)(?!=)/g, /(.)(!)(?!=)/g,
   // double-character logical operators
   /(.)(==)/g, /(.)(<=)/g, /(.)(>=)/g, /(.)(!=)/g,
   // single-character boolean operators
@@ -48,7 +52,7 @@ var KEYWORDS = [
   'true', 'false', 'null',
 ];
 var OPERATORS = [
-  '+', '-', '*', '/',
+  '+', '-', '*', '/', '%',
   '>', '<', '!',
   '==', '<=', '>=', '!=',
   '&', '&&', '||', '!'
@@ -91,6 +95,7 @@ function Tokens(code, lineNum) {
 Tokens.tokenize = function(code) {
   code = code.trimRight();
   code = code.replace(/\/\/.*\n/g, '\n');
+  code = code.replace(/\/\*[\s\S]*\*\//g, '\n');
   DELIMS.forEach(function(regex) {
     code = code.replace(regex, function(match, p1, p2) {
       return p1 + ' ' + p2 + ' ';

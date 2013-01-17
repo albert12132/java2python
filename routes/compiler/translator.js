@@ -328,8 +328,8 @@ function writeStatement(stmt, locals, cls) {
       });
       return code.join('\n');
     case 'assign':
-      return writeIdentifier(stmt.name, locals, cls) + ' = '
-        + writeExpr(stmt.expr, locals, cls);
+      return writeIdentifier(stmt.name, locals, cls) + ' ' + stmt.op
+         + ' ' + writeExpr(stmt.expr, locals, cls);
     case 'block':
       return stmt.stmts.map(function(statement) {
         return writeStatement(statement, locals, cls);
