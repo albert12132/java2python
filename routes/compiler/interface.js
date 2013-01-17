@@ -11,7 +11,30 @@
  *      - Variable
  *-------------------------------------------------------------------*/
 
-var DELIMS = ['{', '}', '(', ')', '[', ']', ';', ',', '"', '*', '/'];
+/* JavaScript doesn't support lookbehinds, so the tokenizer expects
+ * each regex to match 2 expressions -- the first is the symbol
+ * directly preceding the token, and the second is the token itself.
+ */
+var DELIMS = [
+  // braces
+  /(.)({)/g, /(.)(})/g, /(.)(\()/g, /(.)(\))/g, /(.)(\[)/g, /(.)(\])/g,
+  // semicolon, comma, dot
+  /(.)(;)/g, /(.)(,)/g, /([^.])(\.)(?!\d)/g,
+  // string
+  /(.)(")/g,
+  // arithmetic operators
+  /([^+])(\+)(?!\+)/g, /([^-])(-)(?!-)/g, /(.)(\*)/g, /(.)(\/)/g,
+  // ++ and --
+  /(.)(\+\+)/g, /(.)(--)/g,
+  // assignment and single-character logical operators
+  /([^=<>!])(=)(?!=)/g, /(.)(<)(?!=)/g, /(.)(>)(?!=)/g, /(.)(!)(?!=)/g,
+  // double-character logical operators
+  /(.)(==)/g, /(.)(<=)/g, /(.)(>=)/g, /(.)(!=)/g,
+  // single-character boolean operators
+  /([^&])(&)(?!&)/g, /(.)(!)(?!=)/g,
+  // double-character boolean operators
+  /(.)(&&)/g, /(.)(\|\|)/g
+]
 var KEYWORDS = [
   'public', 'private', 'protected',
   'static', // 'abstract', 'final',
@@ -24,8 +47,13 @@ var KEYWORDS = [
   // 'try', 'catch', 'finally',
   'true', 'false', 'null',
 ];
-var OPERATORS = ['+', '-', '*', '/', '==', '&&', '||'];
-var CONTROLS = [];
+var OPERATORS = [
+  '+', '-', '*', '/',
+  '>', '<', '!',
+  '==', '<=', '>=', '!=',
+  '&', '&&', '||', '!'
+];
+var CONTROLS = ['if'];
 
 
 /*--------------*
@@ -63,27 +91,10 @@ function Tokens(code, lineNum) {
 Tokens.tokenize = function(code) {
   code = code.trimRight();
   code = code.replace(/\/\/.*\n/g, '\n');
-  code = code.replace(/\+\+/g, ' ++ ').replace(/--/g, ' -- ');
-  code = code.replace(/==/g, ' == ');
-  code = code.replace(/&&/g, ' && ').replace(/\|\|/g, ' || ');
-  code = code.replace(/([^+])\+([^+])/g, function(match, p1, p2) {
-    return p1 + ' + ' + p2;
-  });
-  code = code.replace(/([^-])-([^-])/g, function(match, p1, p2) {
-    return p1 + ' - ' + p2;
-  });
-  code = code.replace(/([^=])=([^=])/g, function(match, p1, p2) {
-    return p1 + ' = ' + p2;
-  });
-  code = code.replace(/([^&])&([^&])/g, function(match, p1, p2) {
-    return p1 + ' & ' + p2;
-  });
-  code = code.replace(/\.([^\d])/g, function(match, p1) {
-    return ' . ' + p1;
-  });
-  DELIMS.forEach(function(delim) {
-    var regex = new RegExp('\\' + delim, 'g');
-    code = code.replace(regex, ' ' + delim + ' ');
+  DELIMS.forEach(function(regex) {
+    code = code.replace(regex, function(match, p1, p2) {
+      return p1 + ' ' + p2 + ' ';
+    });
   });
   return code.split('\n').map(function(line) {
     return line.split(' ').filter(function(x) {return x != '';});

@@ -304,29 +304,48 @@ function writeOverloadBody(methods, cls) {
 function writeBody(stmts, params, cls) {
   var locals = params;
   body = stmts.map(function(stmt) {
-    switch(stmt.type) {
-      case 'return':
-        if (stmt.expr.length == 0) return 'return';
-        else return 'return ' + writeExpr(stmt.expr, locals, cls);
-      case 'call':
-        var identifier = writeIdentifier(stmt.line, locals, cls);
-        return identifier;
-      case 'declare':
-        var code = [];
-        stmt.variables.forEach(function(variable) {
-          if (locals.indexOf(variable.name) != -1)
-            throw variable.name + ' is already a local variable';
-          else locals.push(variable.name);
-          if (variable.value != null) code.push(variable.name + ' = '
-              + writeExpr(variable.value, locals, cls));
-        });
-        return code.join('\n');
-      case 'assign':
-        return writeIdentifier(stmt.name, locals, cls) + ' = '
-          + writeExpr(stmt.expr, locals, cls);
-    }
+    return writeStatement(stmt, locals, cls)
   });
   return body.join('\n');
+}
+
+function writeStatement(stmt, locals, cls) {
+  switch(stmt.type) {
+    case 'return':
+      if (stmt.expr.length == 0) return 'return';
+      else return 'return ' + writeExpr(stmt.expr, locals, cls);
+    case 'call':
+      var identifier = writeIdentifier(stmt.line, locals, cls);
+      return identifier;
+    case 'declare':
+      var code = [];
+      stmt.variables.forEach(function(variable) {
+        if (locals.indexOf(variable.name) != -1)
+          throw variable.name + ' is already a local variable';
+        else locals.push(variable.name);
+        if (variable.value != null) code.push(variable.name + ' = '
+            + writeExpr(variable.value, locals, cls));
+      });
+      return code.join('\n');
+    case 'assign':
+      return writeIdentifier(stmt.name, locals, cls) + ' = '
+        + writeExpr(stmt.expr, locals, cls);
+    case 'block':
+      return stmt.stmts.map(function(statement) {
+        return writeStatement(statement, locals, cls);
+      }).join('\n');
+    case 'if':
+      var code = 'if ' + writeExpr(stmt.pred, locals, cls) + ':\n';
+      code += tab(writeStatement(stmt.suite, locals, cls)) + '\n';
+      if (typeof stmt.else != 'undefined')
+        if (stmt.else.type == 'if') {
+          code += 'el' + writeStatement(stmt.else, locals, cls);
+        } else {
+          code += 'else:\n'
+              + tab(writeStatement(stmt.else, locals, cls));
+        }
+      return code;
+  }
 }
 
 /**
@@ -402,6 +421,14 @@ function writeExpr(line, locals, cls) {
   } else if (token == '(') {
     expr = line.shift() + writeExpr(line.shift(), locals, cls)
         + ')';
+  } else if (token == '-')  {
+    expr = line.shift() + writeExpr(line.shift(), locals, cls);
+  } else if (token == '+') {
+    line.shift();
+    expr = writeExpr(line.shift(), locals, cls);
+  } else if (token == '!') {
+    line.shift();
+    expr = 'not ' + writeExpr(line.shift(), locals, cls);
   } else {
     expr = token;
   }

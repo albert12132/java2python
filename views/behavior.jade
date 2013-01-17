@@ -13,6 +13,7 @@ block content
     li: a(href='#methods') Methods
     li: a(href='#constructors') Constructors
     li: a(href='#arrays') Arrays
+    li: a(href='#controls') Control Structures
 
   h2#classes Classes
   p.
@@ -63,6 +64,7 @@ block content
     pre.prettyprint.
       class Ex(object):
           x = 4
+
   p.
     In methods, class variables are referred to by using dot notation
     in conjuction with the class name:
@@ -107,7 +109,6 @@ block content
           def foo(self):
               self.y = self.x + 3
               return self.y
-
   h3 Local variables
   p.
     Local variables remain the way they are, without any dot
@@ -126,6 +127,7 @@ block content
               y = 4 + 5
               return y
 
+
   h2#methods Methods
   p.
     Methods will always take at least one argument in Python -- the
@@ -141,6 +143,7 @@ block content
       class Ex(object):
           def foo(self, a, b):
               return a
+
 
   p.
     The tricky part about compiling Java to Python is method
@@ -212,7 +215,7 @@ block content
       }
     pre.prettyprint.
       class Ex(object):
-          def __init__(self, *args):
+          def __init__(self):
               self.x = [1, 2, 3, 4]
   p.
     Array constructors are converted into Python list comprehensions.
@@ -226,11 +229,37 @@ block content
       }
     pre.prettyprint.
       class Ex(object):
-          def __init__(self, *args):
+          def __init__(self):
               self.x = [0 for _ in range(3)]
               self.b = [[False for _ in range(3)] for _ in range(2)]
               self.s = [None for _ in range(3)]
-
+  h2#controls Control Structures
+  h3#ifelse <tt>if</tt>/<tt>else</tt>
+  p.
+    Java's conditional statements are translated in a predictable
+    manner into Python, with <tt>else if</tt> clauses turning into
+    <tt>elif</tt> Python syntax.
+  .code-example
+    pre.prettyprint.
+      class Ex {
+          int foo(int x) {
+              if (x == 0) return 0;
+              else if (x == 1) {
+                  System.out.println("one");
+                  return 1;
+              } else return x;
+          }
+      }
+    pre.prettyprint.
+      class Ex(object):
+          def foo(self, x):
+              if x is 0:
+                  return 0
+              elif x is 1:
+                  print("one")
+                  return 1
+              else:
+                  return x
 block scripts
   script.
     window.onload = prettyPrint();

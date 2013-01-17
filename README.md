@@ -19,9 +19,7 @@ Issues and improvements
 * Code cleanup
 * String method parsing
 * Protection modifiers
-    * implement for methods
 * Control structures
-    * `if`/`else`
     * `while`
     * `for`
     * ` ? : `

@@ -250,13 +250,35 @@ function parseBody(buffer) {
  */
 function readStatement(buffer) {
   var token = buffer.current(';');
-  if (token == 'return') {
+  if (token == '{') {
+    buffer.shift();
+    var stmts = [];
+    while (buffer.current() != '}') {
+      stmts.push(readStatement(buffer));
+    }
+    buffer.shift('}', true);
+    return {type: 'block', stmts: stmts};
+  } else if (token == 'return') {
     buffer.shift('return', true);
     var expr = parseExpr(buffer);
     buffer.shift(';', true);
     return {type: 'return', expr: expr};
   } else if (CONTROLS.indexOf(token) != -1) {
-    // TODO
+    switch(token) {
+      case 'if':
+        buffer.shift();
+        buffer.shift('(', true);
+        var expr = parseExpr(buffer);
+        buffer.shift(')', true);
+        var stmt = readStatement(buffer);
+        var elseClause;
+        if (buffer.current() == 'else') {
+          buffer.shift();
+          elseClause = readStatement(buffer);
+        }
+        return {type: 'if', pred: expr, suite: stmt, else: elseClause};
+        break;
+    }
     return;
   } else if (token == 'new') {
     token = buffer.shift();
@@ -456,6 +478,9 @@ function parseExpr(buffer) {
   if (Tokens.isNumber(token) || token == 'true' || token == 'false'
       || token == 'null') {
     expr.push(buffer.shift());
+  } else if (token == '-' || token == '+' || token == '!') {
+    expr.push(buffer.shift());
+    expr.push(parseExpr(buffer));
   } else if (token == 'new') {
     buffer.shift();
     var identifier = parseIdentifier(buffer);
